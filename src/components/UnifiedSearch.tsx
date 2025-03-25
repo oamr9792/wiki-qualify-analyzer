@@ -18,6 +18,8 @@ import { isSearchAllowed, incrementSearchCount, getRemainingSearches, getTimeUnt
 
 export function UnifiedSearch() {
   const [query, setQuery] = useState('');
+  const [modifierKeyword1, setModifierKeyword1] = useState('');
+  const [modifierKeyword2, setModifierKeyword2] = useState('');
   const [activeTab, setActiveTab] = useState('organic');
   const [eligibilityResult, setEligibilityResult] = useState<WikipediaEligibilityResult | null>(null);
   
@@ -147,9 +149,11 @@ export function UnifiedSearch() {
     setRemainingSearches(remaining);
   }, []);
 
-  // Then update the handleSearch function
+  // Update the handleSearch function to combine the keywords
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!query.trim()) return;
     
     // Check if search is allowed
     if (!isSearchAllowed()) {
@@ -158,7 +162,16 @@ export function UnifiedSearch() {
       return;
     }
     
-    console.log("Searching for:", query);
+    // Build search query with modifiers
+    let searchQuery = query.trim();
+    if (modifierKeyword1.trim()) {
+      searchQuery += ` ${modifierKeyword1.trim()}`;
+    }
+    if (modifierKeyword2.trim()) {
+      searchQuery += ` ${modifierKeyword2.trim()}`;
+    }
+    
+    console.log("Searching for:", searchQuery);
     
     // Increment the search count
     incrementSearchCount();
@@ -167,7 +180,7 @@ export function UnifiedSearch() {
     setRemainingSearches(getRemainingSearches());
     
     // Continue with search
-    await searchGoogle(query);
+    await searchGoogle(searchQuery);
   };
 
   // Helper function to extract domain from URL
@@ -398,38 +411,76 @@ export function UnifiedSearch() {
     <div className={`max-w-5xl w-full ${results.length > 0 ? 'h-screen' : ''} flex flex-col`}>
       <Card className={`${results.length > 0 ? 'mb-4' : 'mb-0 w-full'} shadow-sm border-gray-200`}>
         <CardContent className={`${results.length > 0 ? 'pt-4 pb-3' : 'py-10'}`}>
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <Input
-              type="search" 
-              placeholder="Enter a name, company, or topic..." 
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className={`flex-1 border-gray-300 ${results.length > 0 ? '' : 'text-lg py-6'}`}
-            />
-            <Button 
-              type="submit" 
-              disabled={isLoading}
-              className="bg-[#17163e] hover:bg-[#232253] text-white font-medium"
-              size={results.length > 0 ? "default" : "lg"}
-            >
-              {isLoading ? (
-                <span className="flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-t-transparent border-white"></div>
-                  <span className="sr-only">Analyzing...</span>
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <Shield className="h-4 w-4" />
-                  Analyze
-                </span>
-              )}
-            </Button>
-          </form>
-          {userIp && remainingSearches < Infinity && (
+          <form onSubmit={handleSearch} className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <Input
+                type="search" 
+                placeholder="Enter a name, company, or topic..." 
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className={`flex-1 border-gray-300 ${results.length > 0 ? '' : 'text-lg py-6'}`}
+              />
+              <Button 
+                type="submit" 
+                disabled={isLoading}
+                className="bg-[#17163e] hover:bg-[#232253] text-white font-medium"
+                size={results.length > 0 ? "default" : "lg"}
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-t-transparent border-white"></div>
+                    <span className="sr-only">Analyzing...</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    Analyze
+                  </span>
+                )}
+              </Button>
+            </div>
+            
+            {/* Modifier keywords section */}
+            <div className={`grid grid-cols-2 gap-2 mt-2 ${results.length > 0 ? '' : 'mb-2'}`}>
+              <div>
+                <label htmlFor="modifier1" className="text-xs text-gray-500 mb-1 block">
+                  Optional: Modifier keyword (e.g., company, profession)
+                </label>
+                <Input
+                  id="modifier1"
+                  type="text"
+                  placeholder="e.g., CEO, Author, Technology"
+                  value={modifierKeyword1}
+                  onChange={(e) => setModifierKeyword1(e.target.value)}
+                  className="border-gray-300 text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="modifier2" className="text-xs text-gray-500 mb-1 block">
+                  Optional: Additional modifier
+                </label>
+                <Input
+                  id="modifier2"
+                  type="text"
+                  placeholder="e.g., New York, Software"
+                  value={modifierKeyword2}
+                  onChange={(e) => setModifierKeyword2(e.target.value)}
+                  className="border-gray-300 text-sm"
+                />
+              </div>
+            </div>
+            
+            {/* Add a hint about when to use modifiers */}
             <p className="text-xs text-gray-500 mt-1">
-              You have {remainingSearches} searches remaining in this session.
+              Tip: If your search term is a common name or topic, add modifier keywords to make your search more specific.
             </p>
-          )}
+            
+            {userIp && remainingSearches < Infinity && (
+              <p className="text-xs text-gray-500 mt-1">
+                You have {remainingSearches} searches remaining in this session.
+              </p>
+            )}
+          </form>
         </CardContent>
       </Card>
 
