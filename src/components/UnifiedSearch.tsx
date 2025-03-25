@@ -14,7 +14,7 @@ import { getSourceReliability, wikipediaSourceReliability } from '@/utils/wikipe
 import { CitationCount } from '@/components/CitationCount';
 import { getEffectiveDomain } from '@/utils/domainUtils';
 import { WikipediaArticleDraft } from '@/components/WikipediaArticleDraft';
-import { isSearchAllowed, getRemainingSearches, getTimeUntilReset } from '@/services/rateLimitService';
+import { isSearchAllowed, incrementSearchCount, getRemainingSearches, getTimeUntilReset, getReadableTimeUntilReset } from '@/services/rateLimitService';
 
 export function UnifiedSearch() {
   const [query, setQuery] = useState('');
@@ -109,7 +109,7 @@ export function UnifiedSearch() {
         const response = await fetch('https://api.ipify.org?format=json');
         const data = await response.json();
         setUserIp(data.ip);
-        setRemainingSearches(getRemainingSearches(data.ip));
+        setRemainingSearches(getRemainingSearches());
       } catch (error) {
         console.error('Error fetching IP:', error);
         // If we can't get the IP, assume it's not the unlimited IP
@@ -141,35 +141,33 @@ export function UnifiedSearch() {
     }
   }, []);
 
+  // Inside your component, add this effect to load the current rate limit status on mount
+  useEffect(() => {
+    const remaining = getRemainingSearches();
+    setRemainingSearches(remaining);
+  }, []);
+
   // Then update the handleSearch function
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!query.trim()) return;
-    
-    // Skip rate limiting check in admin mode
-    if (!isAdminMode && !isSearchAllowed(userIp)) {
-      setIsRateLimited(true);
-      
-      // Calculate time until reset
-      const resetTimeMs = getTimeUntilReset(userIp);
-      const resetDays = Math.ceil(resetTimeMs / (24 * 60 * 60 * 1000));
-      
-      setErrorMessage(`Rate limit reached. You can perform 5 searches every 3 days. Please try again in ${resetDays} days.`);
+    // Check if search is allowed
+    if (!isSearchAllowed()) {
+      const timeUntilReset = getReadableTimeUntilReset();
+      setErrorMessage(`You've reached the search limit. Please try again in ${timeUntilReset}.`);
       return;
     }
     
-    setErrorMessage(null);
-    setIsRateLimited(false);
-    
-    // Only update remaining searches if not in admin mode
-    if (!isAdminMode) {
-      setRemainingSearches(getRemainingSearches(userIp));
-    }
-    
-    // Continue with the original search logic
     console.log("Searching for:", query);
-    searchGoogle(query);
+    
+    // Increment the search count
+    incrementSearchCount();
+    
+    // Update remaining searches
+    setRemainingSearches(getRemainingSearches());
+    
+    // Continue with search
+    await searchGoogle(query);
   };
 
   // Helper function to extract domain from URL

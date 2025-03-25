@@ -6,16 +6,15 @@
 const UNLIMITED_IP = '127.0.0.1'; // This will be dynamically determined
 
 // Rate limit configuration
-const MAX_SEARCHES = 5;
-const RATE_LIMIT_PERIOD_DAYS = 3;
+const MAX_SEARCHES = 10; // Increased from 5 to 10
+const RATE_LIMIT_PERIOD_HOURS = 1; // Changed from 3 days to 1 hour
 
-// In-memory storage for rate limiting (replace with database in production)
-interface RateLimitEntry {
-  count: number;
-  timestamp: number;
-}
+// Convert to milliseconds
+const RATE_LIMIT_MS = RATE_LIMIT_PERIOD_HOURS * 60 * 60 * 1000;
 
-const rateLimitStore: Record<string, RateLimitEntry> = {};
+// LocalStorage keys
+const LS_SEARCH_COUNT = 'wikipedia_analyzer_search_count';
+const LS_SEARCH_TIMESTAMP = 'wikipedia_analyzer_search_timestamp';
 
 // Add a function to check if an IP should be unlimited
 export const isUnlimitedIP = (ipAddress: string): boolean => {
@@ -29,76 +28,116 @@ export const isUnlimitedIP = (ipAddress: string): boolean => {
 };
 
 /**
- * Check if a search should be allowed for the given IP address
- * @param ipAddress The IP address to check
- * @returns Whether the search is allowed
+ * Check if a search is allowed
+ * @returns Boolean indicating if search is allowed
  */
-export const isSearchAllowed = (ipAddress: string): boolean => {
-  // Always allow searches from unlimited IPs
-  if (isUnlimitedIP(ipAddress)) {
+export const isSearchAllowed = (): boolean => {
+  try {
+    // Get saved data from localStorage
+    const searchCount = parseInt(localStorage.getItem(LS_SEARCH_COUNT) || '0', 10);
+    const timestamp = parseInt(localStorage.getItem(LS_SEARCH_TIMESTAMP) || '0', 10);
+    const now = Date.now();
+    
+    // Reset if time period has expired
+    if ((now - timestamp) > RATE_LIMIT_MS) {
+      localStorage.setItem(LS_SEARCH_COUNT, '0');
+      localStorage.setItem(LS_SEARCH_TIMESTAMP, now.toString());
+      return true;
+    }
+    
+    // Check if limit reached
+    return searchCount < MAX_SEARCHES;
+  } catch (e) {
+    // If localStorage is not available, default to allowed
+    console.error('Error checking rate limit', e);
     return true;
   }
-
-  // Get the current entry for this IP
-  const entry = rateLimitStore[ipAddress];
-  const now = Date.now();
-
-  // If no entry exists or the entry is older than the rate limit period, allow and reset
-  if (!entry || (now - entry.timestamp) > (RATE_LIMIT_PERIOD_DAYS * 24 * 60 * 60 * 1000)) {
-    rateLimitStore[ipAddress] = {
-      count: 1,
-      timestamp: now
-    };
-    return true;
-  }
-
-  // If under the limit, increment and allow
-  if (entry.count < MAX_SEARCHES) {
-    entry.count += 1;
-    return true;
-  }
-
-  // If over the limit, deny
-  return false;
 };
 
 /**
- * Get the number of remaining searches for an IP address
- * @param ipAddress The IP address to check
- * @returns The number of remaining searches
+ * Increment the search count
  */
-export const getRemainingSearches = (ipAddress: string): number => {
-  if (isUnlimitedIP(ipAddress)) {
-    return Infinity;
+export const incrementSearchCount = (): void => {
+  try {
+    const searchCount = parseInt(localStorage.getItem(LS_SEARCH_COUNT) || '0', 10);
+    const timestamp = parseInt(localStorage.getItem(LS_SEARCH_TIMESTAMP) || '0', 10);
+    const now = Date.now();
+    
+    // Initialize or increment
+    if (!timestamp) {
+      localStorage.setItem(LS_SEARCH_TIMESTAMP, now.toString());
+      localStorage.setItem(LS_SEARCH_COUNT, '1');
+    } else {
+      // Reset if time period has expired
+      if ((now - timestamp) > RATE_LIMIT_MS) {
+        localStorage.setItem(LS_SEARCH_TIMESTAMP, now.toString());
+        localStorage.setItem(LS_SEARCH_COUNT, '1');
+      } else {
+        localStorage.setItem(LS_SEARCH_COUNT, (searchCount + 1).toString());
+      }
+    }
+  } catch (e) {
+    console.error('Error incrementing search count', e);
   }
+};
 
-  const entry = rateLimitStore[ipAddress];
-  const now = Date.now();
-
-  if (!entry || (now - entry.timestamp) > (RATE_LIMIT_PERIOD_DAYS * 24 * 60 * 60 * 1000)) {
+/**
+ * Get remaining searches count
+ * @returns Number of searches remaining
+ */
+export const getRemainingSearches = (): number => {
+  try {
+    const searchCount = parseInt(localStorage.getItem(LS_SEARCH_COUNT) || '0', 10);
+    const timestamp = parseInt(localStorage.getItem(LS_SEARCH_TIMESTAMP) || '0', 10);
+    const now = Date.now();
+    
+    // Reset if time period has expired
+    if (!timestamp || (now - timestamp) > RATE_LIMIT_MS) {
+      return MAX_SEARCHES;
+    }
+    
+    return Math.max(0, MAX_SEARCHES - searchCount);
+  } catch (e) {
+    console.error('Error getting remaining searches', e);
     return MAX_SEARCHES;
   }
-
-  return Math.max(0, MAX_SEARCHES - entry.count);
 };
 
 /**
- * Get the time until rate limit reset in milliseconds
- * @param ipAddress The IP address to check
- * @returns Time in milliseconds until reset, or 0 if no limit
+ * Get time until rate limit reset in milliseconds
+ * @returns Time in milliseconds until reset
  */
-export const getTimeUntilReset = (ipAddress: string): number => {
-  if (isUnlimitedIP(ipAddress)) {
+export const getTimeUntilReset = (): number => {
+  try {
+    const timestamp = parseInt(localStorage.getItem(LS_SEARCH_TIMESTAMP) || '0', 10);
+    const now = Date.now();
+    
+    if (!timestamp) {
+      return 0;
+    }
+    
+    const resetTime = timestamp + RATE_LIMIT_MS;
+    return Math.max(0, resetTime - now);
+  } catch (e) {
+    console.error('Error getting time until reset', e);
     return 0;
   }
+};
 
-  const entry = rateLimitStore[ipAddress];
-  const now = Date.now();
-
-  if (!entry) {
-    return 0;
+/**
+ * Get human-readable time until reset
+ * @returns String like "45 minutes" or "30 seconds"
+ */
+export const getReadableTimeUntilReset = (): string => {
+  const ms = getTimeUntilReset();
+  
+  // Convert to minutes and seconds
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  
+  if (minutes > 0) {
+    return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  } else {
+    return `${seconds} second${seconds === 1 ? '' : 's'}`;
   }
-
-  const resetTime = entry.timestamp + (RATE_LIMIT_PERIOD_DAYS * 24 * 60 * 60 * 1000);
-  return Math.max(0, resetTime - now);
 }; 
