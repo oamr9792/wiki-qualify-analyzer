@@ -1,3 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import a serif font that's good for headlines */
+@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap');
+
+@layer base {
+  :root {
+    --background: #f9f7f5; /* Slightly off-white for paper feel */
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --popover: #ffffff;
+    --popover-foreground: #0f172a;
+    --primary: #17163e;
+    --primary-foreground: #f8fafc;
+    --secondary: #b3903e;
+    --secondary-foreground: #f8fafc;
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --accent: #2b6cb0;
+    --accent-foreground: #f8fafc;
+    --destructive: #dc2626;
+    --destructive-foreground: #f8fafc;
+    --success: #10b981;
+    --success-foreground: #f8fafc;
+    --border: #e5e7eb;
+    --input: #e5e7eb;
+    --ring: #b3903e;
+    --radius: 0.25rem; /* Slightly less rounded corners */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  
+  /* Newspaper style typography */
+  h1, h2, h3, .newspaper-heading {
+    font-family: 'Libre Baskerville', serif;
+    letter-spacing: -0.01em;
+  }
+  
+  h1 {
+    @apply text-3xl mb-2 leading-tight;
+  }
+  
+  h2 {
+    @apply text-2xl mb-2 leading-tight;
+  }
+  
+  /* First paragraph treatment like in newspapers */
+  .newspaper-lead {
+    @apply font-medium text-base;
+  }
+}
+
+/* Custom newspaper-inspired components */
+.newspaper-card {
+  @apply bg-white border border-gray-200 shadow-sm;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.newspaper-divider {
+  @apply my-4 border-t border-gray-200;
+}
+
+.newspaper-indent {
+  @apply pl-4 border-l-2 border-gray-200;
+}
+
+.newspaper-column {
+  @apply px-4 py-2;
+  column-gap: 2rem;
+}
+
+/* Adjust the header and footer for newspaper style */
+.newspaper-header {
+  @apply bg-primary text-white py-4 mb-8 border-b-2 border-secondary;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.newspaper-headline {
+  font-family: 'Libre Baskerville', serif;
+  @apply text-2xl font-bold leading-tight;
+  letter-spacing: -0.02em;
+}
+
+.newspaper-date {
+  @apply text-xs italic opacity-80 mt-1;
+}
+
+/* Rest of existing CSS */
 #root {
   max-width: 1280px;
   margin: 0 auto;
@@ -39,4 +138,88 @@
 
 .read-the-docs {
   color: #888;
+}
+
+/* Add styles for the Wikipedia article draft */
+.prose {
+  font-family: 'Libre Baskerville', serif;
+  line-height: 1.6;
+  color: #202122;
+  font-size: 0.875rem;
+}
+
+.prose p {
+  margin-bottom: 1em;
+}
+
+.prose h1 {
+  font-family: 'Linux Libertine', 'Georgia', 'Times', serif;
+  border-bottom: 1px solid #a2a9b1;
+  font-size: 1.8em;
+  margin-bottom: 0.6em;
+  font-weight: normal;
+}
+
+.prose h2 {
+  font-family: 'Linux Libertine', 'Georgia', 'Times', serif;
+  border-bottom: 1px solid #a2a9b1;
+  font-size: 1.5em;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  font-weight: normal;
+}
+
+.prose h3 {
+  font-size: 1.2em;
+  margin-top: 0.8em;
+  margin-bottom: 0.3em;
+  font-weight: bold;
+}
+
+/* Wiki style links */
+.prose a {
+  color: #0645ad;
+  text-decoration: none;
+}
+
+.prose a:hover {
+  text-decoration: underline;
+}
+
+/* Wiki style lists */
+.prose ul {
+  list-style-type: disc;
+  margin-left: 1.6em;
+  margin-bottom: 1em;
+}
+
+.prose ol {
+  list-style-type: decimal;
+  margin-left: 1.6em;
+  margin-bottom: 1em;
+}
+
+/* Wiki style references */
+.prose .reference {
+  font-size: 0.8em;
+  vertical-align: super;
+  line-height: 0;
+  color: #0645ad;
+}
+
+/* Wiki style tables */
+.prose table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+}
+
+.prose th, .prose td {
+  border: 1px solid #a2a9b1;
+  padding: 0.3em 0.6em;
+}
+
+.prose th {
+  background-color: #f8f9fa;
+  text-align: left;
 }
