@@ -15,12 +15,14 @@
     <!-- Initialize Calendly badge widget -->
     <script type="text/javascript">
       window.onload = function() { 
-        Calendly.initBadgeWidget({ 
-          url: 'https://calendly.com/orani/30min', 
-          text: 'Schedule time with me', 
-          color: '#0069ff', 
-          textColor: '#ffffff' 
-        }); 
+        if (window.Calendly) {
+          Calendly.initBadgeWidget({ 
+            url: 'https://calendly.com/orani/30min', 
+            text: 'Schedule time with me', 
+            color: '#0069ff', 
+            textColor: '#ffffff' 
+          }); 
+        }
       }
     </script>
   </body>
