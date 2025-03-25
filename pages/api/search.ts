@@ -19,12 +19,9 @@ export default async function handler(
       ? 'https://api.dataforseo.com/v3/serp/google/news/live/advanced'
       : 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced';
     
-    const apiUsername = process.env.DATAFORSEO_API_USERNAME;
-    const apiPassword = process.env.DATAFORSEO_API_PASSWORD;
-    
-    if (!apiUsername || !apiPassword) {
-      throw new Error('API credentials not configured');
-    }
+    // Hardcoded credentials as requested
+    const apiUsername = 'orani@reputationcitadel.com';
+    const apiPassword = '01299217bfd31b0b';
     
     const credentials = Buffer.from(`${apiUsername}:${apiPassword}`).toString('base64');
     
@@ -39,7 +36,7 @@ export default async function handler(
           language_code: 'en',
           location_code: 2840, // United States
           keyword: keyword,
-          depth: depth, // Use the specified depth parameter
+          depth: depth,
           search_param: se_type === 'news' ? 'tbm=nws' : undefined
         }
       ])
@@ -50,9 +47,6 @@ export default async function handler(
     }
     
     const data = await response.json();
-    
-    // Log the raw API response for debugging
-    console.log(`DataForSEO ${se_type} API response:`, JSON.stringify(data).substring(0, 500));
     
     return res.status(200).json(data);
     
