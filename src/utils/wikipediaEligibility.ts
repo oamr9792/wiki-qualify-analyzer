@@ -125,33 +125,24 @@ export function assessWikipediaEligibility(
     }
   });
   
-  // Base score on number of reliable sources (stricter scoring)
-  if (reliableSources.highlyReliable >= 5) {
-    score += 60;
-    reasons.push(`Found ${reliableSources.highlyReliable} highly reliable sources`);
-  } else if (reliableSources.highlyReliable >= 3) {
-    score += 40;
-    reasons.push(`Found ${reliableSources.highlyReliable} highly reliable sources`);
-  } else if (reliableSources.highlyReliable > 0) {
-    score += 20;
-    reasons.push(`Found ${reliableSources.highlyReliable} highly reliable sources`);
-  } else {
-    reasons.push(`No highly reliable sources found`);
+  // Update the scoring weights to give more value to highly reliable sources
+  score += reliableSources.highlyReliable * 15; // Increase from 10 to 15
+  score += reliableSources.moderatelyReliable * 5; // Keep at 5
+  score += reliableSources.unreliable * 1; // Reduce from 2 to 1
+  
+  // Add a bonus for having multiple highly reliable sources
+  if (reliableSources.highlyReliable >= 3) {
+    score += 15; // Bonus for having 3+ highly reliable sources
+    reasons.push("Has multiple high-quality sources covering the topic");
+  } else if (reliableSources.highlyReliable >= 1) {
+    score += 5; // Smaller bonus for having at least 1 highly reliable source
   }
   
-  // Add points for moderately reliable sources, but with less weight
-  if (reliableSources.moderatelyReliable >= 5) {
-    score += 15;
-    reasons.push(`Found ${reliableSources.moderatelyReliable} moderately reliable sources`);
-  } else if (reliableSources.moderatelyReliable > 0) {
+  // Add a bonus for diversity of sources
+  const totalUniqueSourceDomains = new Set(sourcesList.map(s => s.domain)).size;
+  if (totalUniqueSourceDomains >= 3) {
     score += 10;
-    reasons.push(`Found ${reliableSources.moderatelyReliable} moderately reliable sources`);
-  }
-  
-  // Bonus for diverse sources
-  if (reliableSources.highlyReliable >= 3 && reliableSources.moderatelyReliable >= 2) {
-    score += 10;
-    reasons.push(`Found a diverse mix of reliable sources`);
+    reasons.push("Topic is covered by multiple independent sources");
   }
   
   // Only add significant points for news results if they're from highly reliable sources
@@ -254,16 +245,21 @@ export function assessWikipediaEligibility(
     displayScore = Math.round(displayScore);
   }
   
-  // Determine eligibility based on the RAW score, not the inflated display score
-  // This ensures we don't change the actual eligibility assessment
-  const eligible = hasExistingWikipedia || (rawScore > 70 && reliableSources.highlyReliable >= 3);
+  // Then update the eligibility determination
+  let eligible = false;
+  if (displayScore >= 70) {
+    eligible = true;
+    reasons.push("Score is high enough to indicate eligibility");
+  } else if (displayScore >= 55) { // Lower this threshold
+    reasons.push("Score is almost high enough for eligibility");
+  }
   
   // Determine suggested action
   if (hasExistingWikipedia) {
     suggestedAction = "View or improve the existing Wikipedia article";
   } else if (eligible) {
     suggestedAction = "Consider creating a Wikipedia article with these reliable sources";
-  } else if (rawScore > 40) {
+  } else if (displayScore > 40) {
     suggestedAction = "Potentially eligible, but needs more reliable sources";
   } else {
     suggestedAction = "Topic likely does not meet Wikipedia's notability guidelines";
