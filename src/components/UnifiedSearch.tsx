@@ -412,7 +412,8 @@ export function UnifiedSearch() {
       <Card className={`${results.length > 0 ? 'mb-4' : 'mb-0 w-full'} shadow-sm border-gray-200`}>
         <CardContent className={`${results.length > 0 ? 'pt-4 pb-3' : 'py-10'}`}>
           <form onSubmit={handleSearch} className="flex flex-col gap-2">
-            <div className="flex gap-2">
+            {/* Make search input and button stack on mobile */}
+            <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 type="search" 
                 placeholder="Enter a name, company, or topic..." 
@@ -423,7 +424,7 @@ export function UnifiedSearch() {
               <Button 
                 type="submit" 
                 disabled={isLoading}
-                className="bg-[#17163e] hover:bg-[#232253] text-white font-medium"
+                className="bg-[#17163e] hover:bg-[#232253] text-white font-medium mt-2 sm:mt-0"
                 size={results.length > 0 ? "default" : "lg"}
               >
                 {isLoading ? (
@@ -440,11 +441,11 @@ export function UnifiedSearch() {
               </Button>
             </div>
             
-            {/* Modifier keywords section */}
-            <div className={`grid grid-cols-2 gap-2 mt-2 ${results.length > 0 ? '' : 'mb-2'}`}>
+            {/* Make modifier keywords stack on mobile */}
+            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 ${results.length > 0 ? '' : 'mb-2'}`}>
               <div>
                 <label htmlFor="modifier1" className="text-xs text-gray-500 mb-1 block">
-                  Optional: Modifier keyword (e.g., company, profession)
+                  Optional: Modifier keyword
                 </label>
                 <Input
                   id="modifier1"
@@ -518,14 +519,14 @@ export function UnifiedSearch() {
         </Alert>
       )}
 
-      {/* Results display - tabbed interface for better organization */}
+      {/* Results display - tabbed interface optimized for mobile */}
       {results.length > 0 && !isLoading && (
         <div className="flex-1 overflow-hidden">
           <Tabs defaultValue="eligibility" className="h-full flex flex-col">
-            <TabsList className="w-full mb-2 justify-start">
-              <TabsTrigger value="eligibility">Eligibility</TabsTrigger>
-              <TabsTrigger value="sources">Sources</TabsTrigger>
-              <TabsTrigger value="draft">Wikipedia Draft</TabsTrigger>
+            <TabsList className="w-full mb-2 justify-start overflow-x-auto flex-nowrap">
+              <TabsTrigger value="eligibility" className="whitespace-nowrap">Eligibility</TabsTrigger>
+              <TabsTrigger value="sources" className="whitespace-nowrap">Sources</TabsTrigger>
+              <TabsTrigger value="draft" className="whitespace-nowrap">Wikipedia Draft</TabsTrigger>
             </TabsList>
             
             <div className="flex-1 overflow-auto">
@@ -543,10 +544,9 @@ export function UnifiedSearch() {
                 <Card className="h-full border-gray-200">
                   <CardContent className="p-4">
                     <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-medium mb-2">Source Analysis</h3>
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+                        <h3 className="text-lg font-medium mb-2 sm:mb-0">Source Analysis</h3>
                         
-                        {/* Add the consultation button */}
                         <Button 
                           onClick={() => {
                             if (typeof window !== 'undefined' && window.Calendly) {
@@ -557,7 +557,7 @@ export function UnifiedSearch() {
                               window.open('https://calendly.com/orani/30min', '_blank');
                             }
                           }}
-                          className="bg-[#17163e] hover:bg-[#232253] text-white"
+                          className="bg-[#17163e] hover:bg-[#232253] text-white w-full sm:w-auto"
                           size="sm"
                         >
                           <Calendar className="h-4 w-4 mr-2" />
@@ -567,8 +567,8 @@ export function UnifiedSearch() {
                       
                       {eligibilityResult && (
                         <div className="space-y-3">
-                          {/* Source Statistics */}
-                          <div className="grid grid-cols-4 gap-2 text-sm">
+                          {/* Source Statistics - make responsive on mobile */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
                             <div className="border p-2 rounded">
                               <div className="text-xs text-gray-600">Reliable</div>
                               <div className="font-bold">

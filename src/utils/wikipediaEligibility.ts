@@ -334,87 +334,43 @@ export const checkForExistingWikipedia = (
   results: SearchResult[]
 ): { exists: boolean; url: string | null } => {
   // Normalize the query for comparison
-  const normalizedQuery = query.trim().toLowerCase().replace(/\s+/g, '_');
-  
-  // Find potential Wikipedia results
-  const wikipediaResults = results.filter(r => 
-    r.url.includes('wikipedia.org/wiki/') && 
-    // Exclude these types of pages that aren't actually about the topic
-    !r.url.includes('wikipedia.org/wiki/Category:') &&
-    !r.url.includes('wikipedia.org/wiki/List_of') &&
-    !r.url.includes('wikipedia.org/wiki/Template:') &&
-    !r.url.includes('wikipedia.org/wiki/Wikipedia:') &&
-    !r.url.includes('wikipedia.org/wiki/Help:') &&
-    !r.url.includes('wikipedia.org/wiki/Portal:') &&
-    !r.url.includes('wikipedia.org/wiki/Talk:') &&
-    !r.url.includes('wikipedia.org/wiki/File:')
-  );
-  
-  if (wikipediaResults.length === 0) {
-    return { exists: false, url: null };
-  }
+  const normalizedQuery = query.trim().toLowerCase();
 
-  // Extract the page title from the URL and normalize it
-  const matchedResults = wikipediaResults.filter(result => {
-    try {
-      // Get the Wikipedia page title from the URL path
-      const urlPath = new URL(result.url).pathname;
-      const pageTitleWithUnderscores = urlPath.split('/wiki/')[1];
-      
-      // If we can't extract a title, skip this result
-      if (!pageTitleWithUnderscores) return false;
-      
-      // Normalize the page title (decode URL components, replace underscores with spaces, lowercase)
-      const pageTitle = decodeURIComponent(pageTitleWithUnderscores)
-        .replace(/_/g, ' ')
-        .toLowerCase();
-      
-      // Check if the title contains the query keywords
-      const queryKeywords = normalizedQuery.replace(/_/g, ' ').split(' ');
-      
-      // For multi-word queries, check if most significant words are in the page title
-      // (Ignore common words like "the", "and", "of", etc.)
-      if (queryKeywords.length > 1) {
-        const significantKeywords = queryKeywords.filter(word => 
-          word.length > 2 && !['the', 'and', 'of', 'in', 'on', 'at', 'by', 'for', 'with', 'about'].includes(word)
-        );
-        
-        // Calculate what percentage of significant keywords are in the title
-        const matchCount = significantKeywords.filter(keyword => pageTitle.includes(keyword)).length;
-        const matchPercentage = significantKeywords.length > 0 
-          ? (matchCount / significantKeywords.length) 
-          : 0;
-        
-        // Require at least 70% of keywords to match for multi-word queries
-        return matchPercentage >= 0.7;
-      }
-      
-      // For single-word queries, the page title should start with the query or be very similar
-      return pageTitle.startsWith(normalizedQuery.replace(/_/g, ' ')) || 
-             pageTitle === normalizedQuery.replace(/_/g, ' ');
-    } catch (e) {
-      console.error('Error parsing Wikipedia URL:', e, result.url);
+  // Only look for direct Wikipedia matches in the search results
+  const wikipediaResult = results.find(result => {
+    // Must be a Wikipedia URL
+    if (!result.url.includes('wikipedia.org/wiki/')) {
       return false;
     }
-  });
-  
-  // Check title similarity in search results
-  const titleMatch = wikipediaResults.find(result => {
-    const resultTitle = result.title.toLowerCase();
-    return resultTitle.includes(query.toLowerCase()) ||
-           resultTitle.includes(`${query.toLowerCase()} - wikipedia`);
-  });
-  
-  // Return the best match - either a URL match or a title match
-  if (matchedResults.length > 0) {
-    return { exists: true, url: matchedResults[0].url };
-  } else if (titleMatch) {
-    // Double-check if it's a disambiguation page
-    if (titleMatch.title.toLowerCase().includes('disambiguation')) {
-      return { exists: false, url: null };
+    
+    // Skip non-article pages
+    if (
+      result.url.includes('wikipedia.org/wiki/Category:') ||
+      result.url.includes('wikipedia.org/wiki/Wikipedia:') ||
+      result.url.includes('wikipedia.org/wiki/Template:') ||
+      result.url.includes('wikipedia.org/wiki/Help:') ||
+      result.url.includes('wikipedia.org/wiki/Portal:') ||
+      result.url.includes('wikipedia.org/wiki/Talk:') ||
+      result.url.includes('wikipedia.org/wiki/File:') ||
+      result.url.includes('wikipedia.org/wiki/List_of')
+    ) {
+      return false;
     }
-    return { exists: true, url: titleMatch.url };
-  }
+    
+    // Check if the title matches our query (basic check)
+    // The Wikipedia result title typically has " - Wikipedia" appended
+    const titleWithoutSuffix = result.title
+      .replace(/ - Wikipedia.*$/, '')
+      .toLowerCase();
+    
+    // Direct match or very close match
+    return titleWithoutSuffix === normalizedQuery || 
+           normalizedQuery.includes(titleWithoutSuffix) || 
+           titleWithoutSuffix.includes(normalizedQuery);
+  });
   
-  return { exists: false, url: null };
+  return {
+    exists: !!wikipediaResult,
+    url: wikipediaResult ? wikipediaResult.url : null
+  };
 }; 
