@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { Analytics } from "@vercel/analytics/react";
 import './App.css';
 import Index from './pages/Index';
 import { ThemeProvider } from '@/components/ThemeProvider';
@@ -25,6 +26,7 @@ function App() {
             </footer>
           </Router>
         </TooltipProvider>
+        <Analytics />
       </ThemeProvider>
     </QueryClientProvider>
   );
