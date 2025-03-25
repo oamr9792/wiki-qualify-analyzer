@@ -10,7 +10,7 @@ const Index = () => {
           Wikipedia Eligibility Analyser
         </h1>
         <p className="max-w-2xl mx-auto text-lg text-gray-500 font-sans leading-relaxed">
-          Analyze your online presence and determine Wikipedia eligibility based on source reliability
+          Analyze your online presence and determine Wikipedia eligibility based on source reliability, notability and credibility.
         </p>
       </div>
       
