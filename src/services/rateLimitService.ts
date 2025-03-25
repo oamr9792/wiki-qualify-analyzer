@@ -6,8 +6,8 @@
 const UNLIMITED_IP = '127.0.0.1'; // This will be dynamically determined
 
 // Rate limit configuration
-const MAX_SEARCHES = 10; // Increased from 5 to 10
-const RATE_LIMIT_PERIOD_HOURS = 1; // Changed from 3 days to 1 hour
+const MAX_SEARCHES = 10; // Allow 10 searches
+const RATE_LIMIT_PERIOD_HOURS = 24; // Per 24 hours (stricter)
 
 // Convert to milliseconds
 const RATE_LIMIT_MS = RATE_LIMIT_PERIOD_HOURS * 60 * 60 * 1000;
