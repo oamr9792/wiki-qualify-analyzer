@@ -1,14 +1,22 @@
 /* Updated font imports for more modern look */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+Pro:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
 /* Update the base styles */
 :root {
   --font-serif: 'Source Serif Pro', Georgia, serif;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Libre Baskerville', Georgia, serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --color-paper: #fffdf7;
+  --color-ink: #1a1a1a;
+  --color-accent: #d62828;
 }
 
 body {
-  font-family: var(--font-sans);
+  background-color: var(--color-paper);
+  font-family: var(--font-body);
+  color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -55,4 +63,8 @@ body {
 
 .tab-trigger[data-state="inactive"]:hover {
   background-color: rgba(255, 255, 255, 0.7);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
 } 

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wikipedia Eligibility Analyser</title>
+    <!-- Calendly widget code -->
+    <link href="https://assets.calendly.com/assets/external/widget.css" rel="stylesheet">
+    <script src="https://assets.calendly.com/assets/external/widget.js" type="text/javascript" async></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <!-- Initialize Calendly badge widget -->
+    <script type="text/javascript">
+      window.onload = function() { 
+        Calendly.initBadgeWidget({ 
+          url: 'https://calendly.com/orani/30min', 
+          text: 'Schedule time with me', 
+          color: '#0069ff', 
+          textColor: '#ffffff' 
+        }); 
+      }
+    </script>
+  </body>
+</html> 

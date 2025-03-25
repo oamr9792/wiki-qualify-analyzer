@@ -7,7 +7,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ExternalLink, AlertCircle, Globe, Info, Search, Newspaper, BookOpen, CheckCircle, XCircle, HelpCircle, Shield } from 'lucide-react';
+import { ExternalLink, AlertCircle, Globe, Info, Search, Newspaper, BookOpen, CheckCircle, XCircle, HelpCircle, Shield, Loader2, Terminal, Calendar } from 'lucide-react';
 import { WikipediaEligibility } from '@/components/WikipediaEligibility';
 import { assessWikipediaEligibility, WikipediaEligibilityResult } from '@/utils/wikipediaEligibility';
 import { getSourceReliability, wikipediaSourceReliability } from '@/utils/wikipediaSourceReliability';
@@ -46,12 +46,33 @@ export function UnifiedSearch() {
   // Add this at the top of the UnifiedSearch component
   const [isAdminMode, setIsAdminMode] = useState(false);
   
+  // Add these state variables to your component
+  const [loadingStage, setLoadingStage] = useState(0);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  
+  // Define the loading stages
+  const loadingStages = [
+    { message: "Initializing search...", duration: 600 },
+    { message: "Querying search engines...", duration: 1200 },
+    { message: "Analyzing source reliability...", duration: 1500 },
+    { message: "Parsing publication data...", duration: 1000 },
+    { message: "Evaluating citation metrics...", duration: 1300 },
+    { message: "Calculating eligibility score...", duration: 1000 },
+    { message: "Generating draft content...", duration: 1400 },
+    { message: "Finalizing analysis...", duration: 800 }
+  ];
+
   // Update the handleCitationCount callback
   const handleCitationCount = useCallback((domain: string, count: number) => {
-    setDomainCitations(prev => ({
-      ...prev,
-      [domain]: count
-    }));
+    // Prevent unnecessary state updates by checking if the citation count changed
+    setDomainCitations(prev => {
+      // Only update if the count is different from what we already have
+      if (prev[domain] === count) return prev;
+      return {
+        ...prev,
+        [domain]: count
+      };
+    });
   }, []);
 
   // Assess Wikipedia eligibility whenever search results update
@@ -81,7 +102,7 @@ export function UnifiedSearch() {
     }
   }, [results, newsResults, query, domainCitations]);
 
-  // Add effect to get user IP
+  // Fix the useEffect that gets the user IP and checks admin mode
   useEffect(() => {
     const getUserIp = async () => {
       try {
@@ -96,31 +117,29 @@ export function UnifiedSearch() {
       }
     };
     
-    // Add this to your useEffect that runs on component mount
-    useEffect(() => {
-      // Check for admin mode from query parameter or localStorage
-      const urlParams = new URLSearchParams(window.location.search);
-      const adminMode = urlParams.get('admin') === 'true';
-      
-      if (adminMode) {
-        // Set admin mode and store in localStorage
-        setIsAdminMode(true);
-        localStorage.setItem('wikiAnalyzerAdminMode', 'true');
-      } else {
-        // Check if admin mode is stored in localStorage
-        const storedAdminMode = localStorage.getItem('wikiAnalyzerAdminMode') === 'true';
-        setIsAdminMode(storedAdminMode);
-      }
-      
-      // Fetch IP only if not in admin mode
-      if (!adminMode && !storedAdminMode) {
-        getUserIp();
-      } else {
-        // In admin mode, no rate limits apply
-        setRemainingSearches(Infinity);
-      }
-    }, []);
-  };
+    // Check for admin mode from query parameter or localStorage
+    const urlParams = new URLSearchParams(window.location.search);
+    const adminMode = urlParams.get('admin') === 'true';
+    // Move this declaration up so it's accessible throughout the function
+    const storedAdminMode = localStorage.getItem('wikiAnalyzerAdminMode') === 'true';
+    
+    if (adminMode) {
+      // Set admin mode and store in localStorage
+      setIsAdminMode(true);
+      localStorage.setItem('wikiAnalyzerAdminMode', 'true');
+    } else {
+      // Use stored admin mode
+      setIsAdminMode(storedAdminMode);
+    }
+    
+    // Fetch IP only if not in admin mode
+    if (!adminMode && !storedAdminMode) {
+      getUserIp();
+    } else {
+      // In admin mode, no rate limits apply
+      setRemainingSearches(Infinity);
+    }
+  }, []);
 
   // Then update the handleSearch function
   const handleSearch = async (e: React.FormEvent) => {
@@ -259,7 +278,7 @@ export function UnifiedSearch() {
     });
     
     // Get reliability using the citation count if available and not in predefined list
-    const reliability = getSourceReliability(url, !isInPredefinedList ? citationCount : undefined);
+    const reliability = getSourceReliability(url);
     
     // Format the badge based on reliability
     switch (reliability.reliability) {
@@ -268,7 +287,7 @@ export function UnifiedSearch() {
           <Badge variant="success" className="text-xs ml-2 flex items-center gap-1">
             <CheckCircle className="h-3 w-3" />
             Reliable
-            {reliability.citationCount && ` (${reliability.citationCount} citations)`}
+            {citationCount && citationCount > 0 && ` (${citationCount} citations)`}
           </Badge>
         );
       case "Generally unreliable":
@@ -297,19 +316,24 @@ export function UnifiedSearch() {
               </Badge>
             );
           } else {
-            // If no citations yet, show citation counter component
+            // Add a check to prevent rendering CitationCount if we've already fetched it
+            // and it returned 0
+            const shouldShowCitationCount = !(normalizedDomain in domainCitations && domainCitations[normalizedDomain] === 0);
+            
             return (
               <>
                 <Badge variant="outline" className="text-xs ml-2 flex items-center gap-1">
                   <HelpCircle className="h-3 w-3" />
                   No Consensus
                 </Badge>
-                <span className="inline-block ml-1">
-                  <CitationCount 
-                    domain={normalizedDomain} 
-                    onCitationCount={(count) => handleCitationCount(normalizedDomain, count)} 
-                  />
-                </span>
+                {shouldShowCitationCount && (
+                  <span className="inline-block ml-1">
+                    <CitationCount 
+                      domain={normalizedDomain} 
+                      onCitationCount={(count) => handleCitationCount(normalizedDomain, count)} 
+                    />
+                  </span>
+                )}
               </>
             );
           }
@@ -324,27 +348,76 @@ export function UnifiedSearch() {
     }
   };
 
+  // Add this effect to handle staged loading animation
+  useEffect(() => {
+    if (!isLoading) {
+      // Reset progress when not loading
+      setLoadingStage(0);
+      setLoadingProgress(0);
+      return;
+    }
+
+    let stageTimer: NodeJS.Timeout;
+    let progressTimer: NodeJS.Timeout;
+    let currentProgress = 0;
+    
+    // Advance to next stage
+    const advanceStage = (stage: number) => {
+      if (stage >= loadingStages.length) return;
+      
+      setLoadingStage(stage);
+      currentProgress = 0;
+      setLoadingProgress(0);
+      
+      // Set timer for next stage
+      stageTimer = setTimeout(() => {
+        advanceStage(stage + 1);
+      }, loadingStages[stage].duration);
+      
+      // Update progress within this stage
+      const progressInterval = 50; // Update every 50ms
+      const incrementAmount = 100 / (loadingStages[stage].duration / progressInterval);
+      
+      progressTimer = setInterval(() => {
+        currentProgress += incrementAmount;
+        setLoadingProgress(Math.min(currentProgress, 100));
+        
+        if (currentProgress >= 100) clearInterval(progressTimer);
+      }, progressInterval);
+    };
+    
+    // Start the animation
+    advanceStage(0);
+    
+    // Cleanup timers
+    return () => {
+      clearTimeout(stageTimer);
+      clearInterval(progressTimer);
+    };
+  }, [isLoading, loadingStages]);
+
   return (
-    <div className="max-w-5xl mx-auto">
-      <Card className="mb-8 border-accent/20 newspaper-card">
-        <CardContent className="pt-6">
-          <form onSubmit={handleSearch} className="flex gap-3">
-            <Input 
+    <div className={`max-w-5xl w-full ${results.length > 0 ? 'h-screen' : ''} flex flex-col`}>
+      <Card className={`${results.length > 0 ? 'mb-4' : 'mb-0 w-full'} shadow-sm border-gray-200`}>
+        <CardContent className={`${results.length > 0 ? 'pt-4 pb-3' : 'py-10'}`}>
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <Input
               type="search" 
               placeholder="Enter a name, company, or topic..." 
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="flex-1 border-accent/30 focus-visible:ring-secondary"
+              className={`flex-1 border-gray-300 ${results.length > 0 ? '' : 'text-lg py-6'}`}
             />
             <Button 
               type="submit" 
               disabled={isLoading}
-              className="bg-primary hover:bg-primary/90 shadow-sm"
+              className="bg-[#17163e] hover:bg-[#232253] text-white font-medium"
+              size={results.length > 0 ? "default" : "lg"}
             >
               {isLoading ? (
                 <span className="flex items-center gap-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-t-transparent border-white"></div>
-                  Analyzing...
+                  <span className="sr-only">Analyzing...</span>
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
@@ -355,112 +428,299 @@ export function UnifiedSearch() {
             </Button>
           </form>
           {userIp && remainingSearches < Infinity && (
-            <p className="text-xs text-muted-foreground mt-2">
-              You have {remainingSearches} searches remaining in this period.
+            <p className="text-xs text-gray-500 mt-1">
+              You have {remainingSearches} searches remaining in this session.
             </p>
           )}
         </CardContent>
       </Card>
 
+      {/* Loading state with techy language but simple UI */}
       {isLoading && (
-        <div className="flex flex-col items-center justify-center py-16">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-t-transparent border-primary mb-4"></div>
-          <p className="text-muted-foreground">Analyzing digital footprint...</p>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center p-6 max-w-md">
+            <div className="mb-6">
+              <div className="animate-spin rounded-full h-10 w-10 border-4 border-t-transparent border-primary mx-auto mb-4"></div>
+            </div>
+            
+            <div className="text-primary font-medium mb-2">
+              {loadingStages[loadingStage]?.message || "Processing..."}
+            </div>
+            
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+              <div 
+                className="bg-primary h-2 rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${loadingProgress}%` }}
+              />
+            </div>
+            
+            <div className="text-xs text-gray-500">
+              {Math.round(loadingProgress)}% complete
+            </div>
+          </div>
         </div>
       )}
 
       {errorMessage && (
-        <Alert variant="destructive" className="mt-4">
+        <Alert variant="destructive" className="mt-2 mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
       )}
 
-      {/* Results Summary */}
-      {eligibilityResult && (
-        <div className="space-y-6">
-          <Card className="mt-8 mb-6 border-secondary/20 overflow-hidden newspaper-card">
-            <div className="bg-primary/5 border-b border-primary/10 py-3 px-6">
-              <h3 className="font-medium flex items-center">
-                <BookOpen className="mr-2 h-5 w-5 text-secondary" />
-                Wikipedia Assessment
-              </h3>
-            </div>
-            <CardContent className="pt-6">
-              <Tabs defaultValue="assessment" className="mt-2">
-                <TabsList className="w-full mb-4 p-1 bg-muted/80 shadow-sm">
-                  <TabsTrigger 
-                    value="assessment" 
-                    className="flex-1 py-2 font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-50 data-[state=inactive]:hover:bg-gray-100/50 transition-all"
-                  >
-                    Eligibility Analysis
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="draft" 
-                    className="flex-1 py-2 font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm hover:bg-gray-50 data-[state=inactive]:hover:bg-gray-100/50 transition-all"
-                  >
-                    Draft Article
-                  </TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="assessment">
-                  {!(eligibilityResult.hasExistingWikipedia && eligibilityResult.existingWikipediaUrl) && (
-                    <WikipediaEligibility result={eligibilityResult} />
-                  )}
-                  {(eligibilityResult.hasExistingWikipedia && eligibilityResult.existingWikipediaUrl) && (
-                    <Alert variant="default" className="bg-green-50 border-green-200 mt-4">
-                      <div className="flex items-center">
-                        <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-                        <div>
-                          <p className="font-medium text-green-800">
-                            This topic already has a Wikipedia article
-                          </p>
-                          <a 
-                            href={eligibilityResult.existingWikipediaUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-green-700 underline text-sm"
-                          >
-                            View Wikipedia article
-                          </a>
-                        </div>
+      {/* Results display - tabbed interface for better organization */}
+      {results.length > 0 && !isLoading && (
+        <div className="flex-1 overflow-hidden">
+          <Tabs defaultValue="eligibility" className="h-full flex flex-col">
+            <TabsList className="w-full mb-2 justify-start">
+              <TabsTrigger value="eligibility">Eligibility</TabsTrigger>
+              <TabsTrigger value="sources">Sources</TabsTrigger>
+              <TabsTrigger value="draft">Wikipedia Draft</TabsTrigger>
+            </TabsList>
+            
+            <div className="flex-1 overflow-auto">
+              {/* Eligibility Tab */}
+              <TabsContent value="eligibility" className="h-full overflow-auto m-0 p-0">
+                <Card className="h-full border-gray-200">
+                  <CardContent className="p-4">
+                    <WikipediaEligibility result={eligibilityResult} query={query} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              {/* Sources Tab */}
+              <TabsContent value="sources" className="h-full overflow-auto m-0 p-0">
+                <Card className="h-full border-gray-200">
+                  <CardContent className="p-4">
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-medium mb-2">Source Analysis</h3>
+                        
+                        {/* Add the consultation button */}
+                        <Button 
+                          onClick={() => {
+                            if (typeof window !== 'undefined' && window.Calendly) {
+                              window.Calendly.initPopupWidget({
+                                url: 'https://calendly.com/orani/30min'
+                              });
+                            } else {
+                              window.open('https://calendly.com/orani/30min', '_blank');
+                            }
+                          }}
+                          className="bg-[#17163e] hover:bg-[#232253] text-white"
+                          size="sm"
+                        >
+                          <Calendar className="h-4 w-4 mr-2" />
+                          Book Consultation
+                        </Button>
                       </div>
-                    </Alert>
-                  )}
-                </TabsContent>
-                
-                <TabsContent value="draft">
-                  <WikipediaArticleDraft 
-                    query={query}
-                    sources={eligibilityResult.sourcesList || []}
-                    results={results}
-                    newsResults={newsResults}
-                    eligible={eligibilityResult.eligible}
-                    hasExistingWikipedia={eligibilityResult.hasExistingWikipedia}
-                    score={eligibilityResult.score}
-                  />
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+                      
+                      {eligibilityResult && (
+                        <div className="space-y-3">
+                          {/* Source Statistics */}
+                          <div className="grid grid-cols-4 gap-2 text-sm">
+                            <div className="border p-2 rounded">
+                              <div className="text-xs text-gray-600">Reliable</div>
+                              <div className="font-bold">
+                                {eligibilityResult.sourcesList.filter(s => s.category === 'highlyReliable').length}
+                              </div>
+                            </div>
+                            <div className="border p-2 rounded">
+                              <div className="text-xs text-gray-600">Moderate</div>
+                              <div className="font-bold">
+                                {eligibilityResult.sourcesList.filter(s => s.category === 'moderatelyReliable').length}
+                              </div>
+                            </div>
+                            <div className="border p-2 rounded">
+                              <div className="text-xs text-gray-600">Unreliable</div>
+                              <div className="font-bold">
+                                {eligibilityResult.sourcesList.filter(s => s.category === 'unreliable').length}
+                              </div>
+                            </div>
+                            <div className="border p-2 rounded">
+                              <div className="text-xs text-gray-600">Deprecated</div>
+                              <div className="font-bold">
+                                {eligibilityResult.sourcesList.filter(s => s.category === 'deprecated').length}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Collapsible Source Lists - Exact copy from WikipediaEligibility */}
+                          <Accordion type="multiple" className="w-full">
+                            {eligibilityResult.sourcesList.filter(s => s.category === 'highlyReliable').length > 0 && (
+                              <AccordionItem value="highlyReliable" className="border-b">
+                                <AccordionTrigger className="text-sm py-2">
+                                  <span className="flex items-center">
+                                    <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
+                                    {eligibilityResult.sourcesList.filter(s => s.category === 'highlyReliable').length} Highly Reliable Sources
+                                  </span>
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                  <ul className="text-sm space-y-1">
+                                    {eligibilityResult.sourcesList.filter(s => s.category === 'highlyReliable').map((source, idx) => (
+                                      <li key={idx} className="flex items-start">
+                                        <span className="text-gray-400 mr-1">•</span>
+                                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                          {source.domain}
+                                        </a>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </AccordionContent>
+                              </AccordionItem>
+                            )}
+                            
+                            {/* Similar structure for other categories */}
+                            {/* Moderately Reliable */}
+                            {eligibilityResult.sourcesList.filter(s => s.category === 'moderatelyReliable').length > 0 && (
+                              <AccordionItem value="moderatelyReliable" className="border-b">
+                                <AccordionTrigger className="text-sm py-2">
+                                  <span className="flex items-center">
+                                    <HelpCircle className="h-4 w-4 mr-2 text-blue-500" />
+                                    {eligibilityResult.sourcesList.filter(s => s.category === 'moderatelyReliable').length} Moderately Reliable Sources
+                                  </span>
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                  <ul className="text-sm space-y-1">
+                                    {eligibilityResult.sourcesList.filter(s => s.category === 'moderatelyReliable').map((source, idx) => (
+                                      <li key={idx} className="flex items-start">
+                                        <span className="text-gray-400 mr-1">•</span>
+                                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                          {source.domain}
+                                        </a>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </AccordionContent>
+                              </AccordionItem>
+                            )}
+                            
+                            {/* Unreliable */}
+                            {eligibilityResult.sourcesList.filter(s => s.category === 'unreliable').length > 0 && (
+                              <AccordionItem value="unreliable" className="border-b">
+                                <AccordionTrigger className="text-sm py-2">
+                                  <span className="flex items-center">
+                                    <XCircle className="h-4 w-4 mr-2 text-gray-500" />
+                                    {eligibilityResult.sourcesList.filter(s => s.category === 'unreliable').length} Unreliable Sources
+                                  </span>
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                  <ul className="text-sm space-y-1">
+                                    {eligibilityResult.sourcesList.filter(s => s.category === 'unreliable').map((source, idx) => (
+                                      <li key={idx} className="flex items-start">
+                                        <span className="text-gray-400 mr-1">•</span>
+                                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                          {source.domain}
+                                        </a>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </AccordionContent>
+                              </AccordionItem>
+                            )}
+                            
+                            {/* Deprecated */}
+                            {eligibilityResult.sourcesList.filter(s => s.category === 'deprecated').length > 0 && (
+                              <AccordionItem value="deprecated" className="border-b">
+                                <AccordionTrigger className="text-sm py-2">
+                                  <span className="flex items-center">
+                                    <XCircle className="h-4 w-4 mr-2 text-gray-500" />
+                                    {eligibilityResult.sourcesList.filter(s => s.category === 'deprecated').length} Deprecated Sources
+                                  </span>
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                  <ul className="text-sm space-y-1">
+                                    {eligibilityResult.sourcesList.filter(s => s.category === 'deprecated').map((source, idx) => (
+                                      <li key={idx} className="flex items-start">
+                                        <span className="text-gray-400 mr-1">•</span>
+                                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                          {source.domain}
+                                        </a>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </AccordionContent>
+                              </AccordionItem>
+                            )}
+                            
+                            {/* No Consensus/Unknown */}
+                            {eligibilityResult.sourcesList.filter(s => !['highlyReliable', 'moderatelyReliable', 'unreliable', 'deprecated'].includes(s.category)).length > 0 && (
+                              <AccordionItem value="noConsensus" className="border-b">
+                                <AccordionTrigger className="text-sm py-2">
+                                  <span className="flex items-center">
+                                    <HelpCircle className="h-4 w-4 mr-2 text-gray-500" />
+                                    {eligibilityResult.sourcesList.filter(s => !['highlyReliable', 'moderatelyReliable', 'unreliable', 'deprecated'].includes(s.category)).length} Sources Without Consensus/Unknown
+                                  </span>
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                  <ul className="text-sm space-y-1">
+                                    {eligibilityResult.sourcesList.filter(s => !['highlyReliable', 'moderatelyReliable', 'unreliable', 'deprecated'].includes(s.category)).map((source, idx) => (
+                                      <li key={idx} className="flex items-start">
+                                        <span className="text-gray-400 mr-1">•</span>
+                                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                          {source.domain}
+                                        </a>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </AccordionContent>
+                              </AccordionItem>
+                            )}
+                          </Accordion>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              {/* Wikipedia Draft Tab */}
+              <TabsContent value="draft" className="h-full overflow-auto m-0 p-0">
+                <Card className="h-full border-gray-200">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-medium">Wikipedia Draft</h3>
+                      
+                      <Button 
+                        onClick={() => {
+                          if (typeof window !== 'undefined' && window.Calendly) {
+                            window.Calendly.initPopupWidget({
+                              url: 'https://calendly.com/orani/30min'
+                            });
+                          } else {
+                            window.open('https://calendly.com/orani/30min', '_blank');
+                          }
+                        }}
+                        className="bg-[#17163e] hover:bg-[#232253] text-white"
+                        size="sm"
+                      >
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Book Consultation
+                      </Button>
+                    </div>
+                    
+                    <WikipediaArticleDraft 
+                      query={query}
+                      sources={[...results, ...newsResults].map(result => ({
+                        ...result,
+                        domain: result.url ? new URL(result.url).hostname : '',
+                        reliability: 'unknown',
+                        category: 'moderatelyReliable',
+                        relevance: 'high'
+                      }))}
+                      results={results}
+                      newsResults={newsResults}
+                      eligible={eligibilityResult?.eligible || false}
+                      hasExistingWikipedia={eligibilityResult?.hasExistingWikipedia || false}
+                      score={eligibilityResult?.score || 0}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </div>
+          </Tabs>
         </div>
-      )}
-
-      {rawData && !results.length && !newsResults.length && (
-        <Card className="max-w-3xl mx-auto mt-6">
-          <CardHeader>
-            <CardTitle className="text-amber-600">Debug Information</CardTitle>
-            <CardDescription>
-              API returned data but no results were processed. Inspect the raw response below:
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <pre className="bg-gray-100 p-4 rounded-md overflow-auto text-xs max-h-96">
-              {JSON.stringify(rawData, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
       )}
     </div>
   );

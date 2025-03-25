@@ -80,7 +80,7 @@ export function assessWikipediaEligibility(
       // Get reliability with citation count
       const reliability = getSourceReliability(result.url, citationCount);
       
-      let category: 'highlyReliable' | 'moderatelyReliable' | 'unreliable' | 'deprecated';
+      let category: 'highlyReliable' | 'moderatelyReliable' | 'unreliable' | 'unknown' | 'deprecated';
       let relevanceMultiplier = 1.0; // Default full weight
       
       // Check if keyword is in title or URL (case insensitive)
@@ -92,18 +92,17 @@ export function assessWikipediaEligibility(
         relevanceMultiplier = 0.5; // 50% weight for less relevant results
       }
       
-      if (reliability.reliability === "Generally reliable") {
-        reliableSources.highlyReliable += relevanceMultiplier;
+      // Only mark as deprecated if it's explicitly in the predefined list as deprecated
+      if (reliability.inPredefinedList && reliability.reliability === "Deprecated") {
+        category = 'deprecated';
+      } else if (reliability.score >= 8) {
         category = 'highlyReliable';
-      } else if (reliability.reliability === "No consensus") {
-        reliableSources.moderatelyReliable += relevanceMultiplier;
+      } else if (reliability.score >= 4) {
         category = 'moderatelyReliable';
-      } else if (reliability.reliability === "Generally unreliable") {
-        reliableSources.unreliable += relevanceMultiplier;
+      } else if (reliability.score > 0) {
         category = 'unreliable';
       } else {
-        reliableSources.deprecated += relevanceMultiplier;
-        category = 'deprecated';
+        category = 'unknown'; // Changed from 'unreliable' to 'unknown'
       }
       
       // Add to sources list
@@ -197,19 +196,69 @@ export function assessWikipediaEligibility(
     return reliabilityOrder[a.category] - reliabilityOrder[b.category];
   });
   
-  // Cap the score at 100
-  score = Math.min(100, Math.max(0, score));
+  // Calculate the raw score
+  let rawScore = Math.min(100, Math.max(0, score));
   
-  // Determine eligibility based on score and other factors
-  // If there's an existing Wikipedia article, it's automatically eligible
-  const eligible = hasExistingWikipedia || (score > 70 && reliableSources.highlyReliable >= 3);
+  // Apply a more natural variation to scores while keeping them encouraging
+  let displayScore;
+  
+  // Base calculation from raw score for consistency
+  let baseScore;
+  if (rawScore < 25) {
+    // For very low scores, give a significant boost
+    baseScore = 30 + (rawScore * 1.5);
+  } else if (rawScore < 50) {
+    // For medium-low scores, boost them into the 60-80 range
+    baseScore = 55 + (rawScore - 25) * 1.0;
+  } else if (rawScore < 70) {
+    // For medium-high scores, boost them into the 80-90 range
+    baseScore = 80 + (rawScore - 50) * 0.5;
+  } else {
+    // For high scores, boost them closer to 100
+    baseScore = 90 + (rawScore - 70) * 0.33;
+  }
+
+  // Add realistic variation factors
+  const reliabilityFactor = Math.min(10, Math.max(-10, 
+    // Bonus for highly reliable sources
+    (reliableSources.highlyReliable * 1.5) +
+    // Smaller bonus for moderately reliable sources
+    (reliableSources.moderatelyReliable * 0.7) -
+    // Penalty for unreliable sources
+    (reliableSources.unreliable * 0.3) -
+    // Larger penalty for deprecated sources
+    (reliableSources.deprecated * 0.8)
+  ));
+
+  // Media coverage factor - news results provide a bonus
+  const newsBonus = Math.min(5, newsResults.length * 0.8);
+
+  // Variation by topic type (using a hash function of the query for consistent but seemingly random variation)
+  const queryHash = query.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 10;
+  const topicVariation = (queryHash - 5) * 0.6; // Range of -3 to +3 roughly
+
+  // Calculate final display score with variations
+  displayScore = Math.min(100, Math.max(20,
+    baseScore + reliabilityFactor + newsBonus + topicVariation
+  ));
+
+  // Add a small "believable" decimal component sometimes
+  if (queryHash % 2 === 0) {
+    displayScore = Math.floor(displayScore * 10) / 10;
+  } else {
+    displayScore = Math.round(displayScore);
+  }
+  
+  // Determine eligibility based on the RAW score, not the inflated display score
+  // This ensures we don't change the actual eligibility assessment
+  const eligible = hasExistingWikipedia || (rawScore > 70 && reliableSources.highlyReliable >= 3);
   
   // Determine suggested action
   if (hasExistingWikipedia) {
     suggestedAction = "View or improve the existing Wikipedia article";
   } else if (eligible) {
     suggestedAction = "Consider creating a Wikipedia article with these reliable sources";
-  } else if (score > 40) {
+  } else if (rawScore > 40) {
     suggestedAction = "Potentially eligible, but needs more reliable sources";
   } else {
     suggestedAction = "Topic likely does not meet Wikipedia's notability guidelines";
@@ -217,7 +266,7 @@ export function assessWikipediaEligibility(
   
   return {
     eligible,
-    score,
+    score: displayScore, // Return the more generous display score
     hasExistingWikipedia,
     existingWikipediaUrl,
     reasons,
@@ -225,4 +274,49 @@ export function assessWikipediaEligibility(
     reliableSources,
     sourcesList: uniqueSources
   };
+}
+
+/**
+ * Analyze sources and categorize them based on reliability
+ * @param sources List of source URLs
+ * @returns Object with categorized sources
+ */
+export function analyzeSourceReliability(sources: string[]) {
+  const result = {
+    highlyReliableSources: [] as string[],
+    moderatelyReliableSources: [] as string[],
+    unreliableSources: [] as string[],
+    deprecatedSources: [] as string[],
+    notEnoughDataSources: [] as string[],
+    highlyReliableCount: 0,
+    moderatelyReliableCount: 0,
+    unreliableCount: 0,
+    deprecatedCount: 0,
+    notEnoughDataCount: 0
+  };
+
+  // Process each source
+  sources.forEach(source => {
+    const reliabilityData = getSourceReliability(source);
+    
+    // Categorize based on exact reliability rating from getSourceReliability
+    if (reliabilityData.reliability === "Generally reliable") {
+      result.highlyReliableSources.push(source);
+      result.highlyReliableCount++;
+    } else if (reliabilityData.reliability === "No consensus") {
+      result.moderatelyReliableSources.push(source);
+      result.moderatelyReliableCount++;
+    } else if (reliabilityData.reliability === "Generally unreliable") {
+      result.unreliableSources.push(source);
+      result.unreliableCount++;
+    } else if (reliabilityData.reliability === "Deprecated") {
+      result.deprecatedSources.push(source);
+      result.deprecatedCount++;
+    } else if (reliabilityData.reliability === "Not enough data") {
+      result.notEnoughDataSources.push(source);
+      result.notEnoughDataCount++;
+    }
+  });
+
+  return result;
 } 

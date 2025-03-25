@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BookOpen, Copy, FileText, CheckCircle, AlertTriangle, AlertCircle, InfoIcon } from 'lucide-react';
+import { BookOpen, Copy, FileText, CheckCircle, AlertTriangle, AlertCircle, InfoIcon, Calendar } from 'lucide-react';
 import { AnalyzedSource } from '@/utils/wikipediaEligibility';
 import { SearchResult } from '@/services/dataForSeoService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { generateWikipediaDraftWithOpenAI } from '@/services/openaiService';
-import { CalendlyEmbed } from '@/components/CalendlyEmbed';
 
 interface WikipediaArticleDraftProps {
   query: string;
@@ -17,6 +16,7 @@ interface WikipediaArticleDraftProps {
   eligible: boolean;
   hasExistingWikipedia: boolean;
   score: number;
+  existingWikipediaUrl?: string;
 }
 
 export function WikipediaArticleDraft({ 
@@ -26,7 +26,8 @@ export function WikipediaArticleDraft({
   newsResults, 
   eligible,
   hasExistingWikipedia,
-  score
+  score,
+  existingWikipediaUrl
 }: WikipediaArticleDraftProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [articleDraft, setArticleDraft] = useState<string>('');
@@ -380,6 +381,16 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
           <InfoIcon className="h-4 w-4" />
           <AlertDescription>
             This topic already has a Wikipedia article. A draft is not needed.
+            {existingWikipediaUrl && (
+              <a 
+                href={existingWikipediaUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline ml-1"
+              >
+                View article
+              </a>
+            )}
           </AlertDescription>
         </Alert>
       )}
@@ -424,6 +435,22 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
                   <><Copy className="h-4 w-4 mr-2" />Copy</>
                 )}
               </Button>
+              <Button 
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.Calendly) {
+                    window.Calendly.initPopupWidget({
+                      url: 'https://calendly.com/orani/30min'
+                    });
+                  } else {
+                    window.open('https://calendly.com/orani/30min', '_blank');
+                  }
+                }}
+                className="bg-[#17163e] hover:bg-[#232253] text-white"
+                size="sm"
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                Book Consultation
+              </Button>
             </div>
           </div>
           
@@ -461,8 +488,84 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
             </TabsContent>
           </Tabs>
           
-          <div className="mt-8">
-            <CalendlyEmbed score={score} />
+          <div className="mb-6">
+            {hasExistingWikipedia ? (
+              <Alert variant="info" className="mb-4">
+                <InfoIcon className="h-4 w-4" />
+                <AlertDescription>
+                  This topic already has a Wikipedia article. A draft is not needed.
+                  {existingWikipediaUrl && (
+                    <a 
+                      href={existingWikipediaUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline ml-1"
+                    >
+                      View article
+                    </a>
+                  )}
+                </AlertDescription>
+              </Alert>
+            ) : eligible ? (
+              <>
+                <h2 className="text-lg font-medium mb-2">You Could be Eligible for a Wikipedia Page</h2>
+                <p className="text-sm text-gray-600 mb-3">
+                  Your topic appears to meet the credibility and sourcing requirements Wikipedia editors look for. 
+                  That's a strong position to be in—congrats.
+                </p>
+                <p className="text-sm text-gray-700 mb-4">
+                  <strong>Contact us for a consultation</strong> to go over next steps. We'll help you fine-tune your narrative, 
+                  identify the best sources to cite, and ensure you approach the process the right way—from draft to approval.
+                </p>
+                <Button 
+                  onClick={() => window.open('mailto:info@wikipublisher.com')}
+                  className="mb-6 bg-blue-900 hover:bg-blue-800 text-white font-medium"
+                >
+                  Contact us for a consultation
+                </Button>
+              </>
+            ) : score >= 45 ? (
+              <>
+                <h2 className="text-lg font-medium mb-2">You're Close — But Not Quite There</h2>
+                <p className="text-sm text-gray-600 mb-2">
+                  You're on the right track. Your subject shows some signs of notability, but it needs a stronger 
+                  foundation to meet Wikipedia's standards. A few more high-quality media mentions or third-party 
+                  sources could make all the difference.
+                </p>
+                <p className="text-sm text-gray-700 mb-4">
+                  <strong>Contact us for a consultation</strong> and we'll show you how to build up your credibility, 
+                  fill in the missing gaps, and get closer to Wikipedia eligibility without wasting time or money.
+                </p>
+                <Button 
+                  onClick={() => window.open('mailto:info@wikipublisher.com')}
+                  className="mb-6 bg-blue-900 hover:bg-blue-800 text-white font-medium"
+                >
+                  Contact us for a consultation
+                </Button>
+              </>
+            ) : (
+              <>
+                <h2 className="text-lg font-medium mb-2">You're Not Ready (Yet)</h2>
+                <p className="text-sm text-gray-600 mb-2">
+                  Wikipedia only allows pages about topics that meet its strict standards for notability and credibility. 
+                  Right now, the available sources and public footprint around your name or brand aren't quite strong enough.
+                </p>
+                <p className="text-sm text-gray-600 mb-2">
+                  But here's the good news: you can build that credibility. With the right strategy—media coverage, 
+                  high-authority citations, and a strong digital footprint—you can get there.
+                </p>
+                <p className="text-sm text-gray-700 mb-4">
+                  <strong>Contact us for a consultation</strong> to discuss how we can boost your online presence, credibility, 
+                  and reputation—so you're ready for Wikipedia when it counts.
+                </p>
+                <Button 
+                  onClick={() => window.open('mailto:info@wikipublisher.com')}
+                  className="mb-6 bg-blue-900 hover:bg-blue-800 text-white font-medium"
+                >
+                  Contact us for a consultation
+                </Button>
+              </>
+            )}
           </div>
         </>
       )}
@@ -470,7 +573,7 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
       {/* For low-score topics that don't show a draft, show Calendly too */}
       {!hasExistingWikipedia && score < 65 && (
         <div className="mt-6">
-          <CalendlyEmbed score={score} />
+          <Button onClick={() => window.open('mailto:info@wikipublisher.com')}>Contact Us</Button>
         </div>
       )}
     </div>

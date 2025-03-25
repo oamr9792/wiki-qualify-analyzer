@@ -1,15 +1,13 @@
-// This component is no longer needed, as we're using the badge widget directly in index.html
 import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar, X } from 'lucide-react';
 
-interface CalendlyEmbedProps {
+interface ContactEmbedProps {
   score: number;
 }
 
-// Renamed to ContactEmbed to completely avoid any Calendly association
-export function CalendlyEmbed({ score }: CalendlyEmbedProps) {
+export function ContactEmbed({ score }: ContactEmbedProps) {
   const [showPopup, setShowPopup] = useState(false);
   
   // Get button text based on score
@@ -118,4 +116,4 @@ export function CalendlyEmbed({ score }: CalendlyEmbedProps) {
       )}
     </>
   );
-}
+} 

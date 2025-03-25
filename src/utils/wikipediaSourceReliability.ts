@@ -1,6 +1,7 @@
 import { calculateReliabilityScore } from "@/services/mediawikiService";
 import { getEffectiveDomain } from "@/utils/domainUtils";
 import { getWikipediaCitationCount, getCitationBasedReliability } from '@/services/mediawikiService';
+import { scoreDomainByCitationCount, mapScoreToReliability } from '@/utils/domainScoring';
 
 // Map of domain names to Wikipedia reliability ratings
 export interface SourceReliability {
@@ -191,64 +192,52 @@ export const wikipediaSourceReliability: Record<string, SourceReliability> = {
   "southfront.org": { name: "SouthFront", reliability: "Deprecated", score: 0 },
 };
 
+// Add citation count cache
+const citationCountCache: Record<string, number> = {};
+
 /**
- * Get reliability information for a URL, optionally with citation count
+ * Get reliability information for a URL from our predefined list
  * @param url URL to check reliability for
- * @param citationCount Optional citation count (if already known)
  * @returns Object with reliability information
  */
-export function getSourceReliability(url: string, citationCount?: number): { 
+export function getSourceReliability(url: string): { 
   reliability: string; 
   description?: string;
-  citationCount?: number;
+  score: number;
+  inPredefinedList: boolean;
 } {
   try {
     // Extract domain from URL
     const domain = getEffectiveDomain(url);
+    const normalizedDomain = domain.replace(/^www\./, '');
     
     // Check our predefined list first
     for (const key in wikipediaSourceReliability) {
-      if (domain === key || domain.endsWith(`.${key}`)) {
+      if (normalizedDomain === key || normalizedDomain.endsWith(`.${key}`)) {
+        // Found in our list - return exactly what's in the list
         return {
           reliability: wikipediaSourceReliability[key].reliability,
-          description: wikipediaSourceReliability[key].description
+          description: `Source reliability based on Wikipedia's perceptions.`,
+          score: wikipediaSourceReliability[key].score,
+          inPredefinedList: true
         };
       }
     }
     
-    // For domains not in our list, use citation count if provided
-    if (citationCount !== undefined) {
-      // Apply more realistic thresholds for Wikipedia citations
-      if (citationCount >= 500) {
-        return {
-          reliability: "Generally reliable",
-          description: `This source has ${citationCount} citations on Wikipedia, indicating widespread acceptance`,
-          citationCount
-        };
-      } else if (citationCount >= 100) {
-        return {
-          reliability: "No consensus",
-          description: `This source has ${citationCount} citations on Wikipedia`,
-          citationCount
-        };
-      } else {
-        return {
-          reliability: "No consensus",
-          description: `This source has only ${citationCount} citations on Wikipedia`,
-          citationCount
-        };
-      }
-    }
-    
-    // Default to "No consensus" if we don't have information
+    // For sources not in our list, return "Unknown" instead of marking as deprecated
     return {
-      reliability: "No consensus",
-      description: "This source is not in our reliability database. Consider checking its reputation."
+      reliability: "Unknown",
+      description: "This source is not in our reliability database.",
+      score: 0,
+      inPredefinedList: false
     };
   } catch (e) {
+    // Error case - return "Unknown" not deprecated
     return {
-      reliability: "No consensus",
-      description: "Unable to determine source reliability."
+      reliability: "Unknown",
+      description: "Unable to determine source reliability.",
+      score: 0,
+      inPredefinedList: false
     };
   }
 } 

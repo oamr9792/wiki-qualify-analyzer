@@ -5,6 +5,9 @@ import { getEffectiveDomain } from '@/utils/domainUtils';
 // Cache to store domain citation counts to avoid repeated API calls
 const citationCountCache: Record<string, number> = {};
 
+// Add a debounce mechanism to prevent too many rapid calls
+let pendingRequests = new Map();
+
 export interface MediaWikiResponse {
   count: number;
   loading: boolean;
@@ -104,58 +107,140 @@ export const calculateReliabilityScore = (citationCount: number): number => {
 };
 
 /**
- * Get the number of times a domain is cited across Wikipedia articles
- * using the exturlusage API endpoint directly
- * @param domain Domain to check (e.g., "nytimes.com")
- * @returns Promise resolving to citation count
+ * Fetches the number of times a domain is cited across Wikipedia
+ * @param domain The domain to check (e.g., "nytimes.com")
+ * @returns The number of citations
  */
-export const getWikipediaCitationCount = async (domain: string): Promise<number> => {
-  // Return cached result if available
-  if (citationCountCache[domain] !== undefined) {
+export async function getWikipediaCitationCount(domain: string): Promise<number> {
+  // Return from cache if available
+  if (domain in citationCountCache) {
     return citationCountCache[domain];
   }
-  
-  try {
-    // Use exactly the API structure provided in the example
-    const apiUrl = new URL('https://en.wikipedia.org/w/api.php');
-    
-    // Set parameters exactly as in the Python example
-    apiUrl.searchParams.append('action', 'query');
-    apiUrl.searchParams.append('list', 'exturlusage');
-    apiUrl.searchParams.append('euquery', domain);
-    apiUrl.searchParams.append('eulimit', '500');
-    apiUrl.searchParams.append('format', 'json');
-    apiUrl.searchParams.append('origin', '*'); // Required for CORS
-    
-    console.log(`Fetching citation count for ${domain} using: ${apiUrl.toString()}`);
-    
-    const response = await fetch(apiUrl.toString());
-    
-    if (!response.ok) {
-      console.error(`Error fetching citation count for ${domain}: ${response.statusText}`);
-      citationCountCache[domain] = 0;
-      return 0;
-    }
-    
-    const data = await response.json();
-    
-    // Extract citation list exactly as in the Python example
-    const citations = data.query?.exturlusage || [];
-    const citationCount = citations.length;
-    
-    console.log(`Citations found for ${domain}: ${citationCount}`);
-    console.log('First few citations:', citations.slice(0, 3));
-    
-    // Cache the result
-    citationCountCache[domain] = citationCount;
-    
-    return citationCount;
-  } catch (error) {
-    console.error(`Error in getWikipediaCitationCount for ${domain}:`, error);
-    citationCountCache[domain] = 0;
-    return 0;
+
+  // Check if there's already a pending request for this domain
+  if (pendingRequests.has(domain)) {
+    return pendingRequests.get(domain);
   }
-};
+
+  // Create a new promise for this request
+  const promise = new Promise<number>(async (resolve) => {
+    // Add a small delay to batch requests
+    await new Promise(r => setTimeout(r, 50));
+    
+    try {
+      // Encode domain for URL safety
+      const encodedDomain = encodeURIComponent(domain);
+      const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=exturlusage&euquery=${encodedDomain}&eulimit=500&format=json&origin=*`;
+
+      const response = await fetch(apiUrl);
+      const data = await response.json();
+      const citations = data?.query?.exturlusage ?? [];
+      const count = citations.length;
+      
+      // Cache the result
+      citationCountCache[domain] = count;
+      resolve(count);
+    } catch (error) {
+      console.error(`Failed to fetch citation count for ${domain}:`, error);
+      // Cache as 0 to prevent repeated failed requests
+      citationCountCache[domain] = 0;
+      resolve(0);
+    } finally {
+      // Remove from pending requests
+      pendingRequests.delete(domain);
+    }
+  });
+  
+  // Store the pending request
+  pendingRequests.set(domain, promise);
+  return promise;
+}
+
+/**
+ * Searches Wikipedia for existing pages about a subject
+ * @param query The search query
+ * @returns Search results from Wikipedia
+ */
+export async function searchWikipedia(query: string): Promise<any[]> {
+  const encodedQuery = encodeURIComponent(query);
+  const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodedQuery}&format=json&origin=*`;
+
+  try {
+    const response = await fetch(apiUrl);
+    const data = await response.json();
+    return data?.query?.search || [];
+  } catch (error) {
+    console.error(`Failed to search Wikipedia for ${query}:`, error);
+    return [];
+  }
+}
+
+/**
+ * Gets the intro extract from a Wikipedia page to verify relevance
+ * @param title Wikipedia page title
+ * @returns The intro extract text
+ */
+export async function getPageExtract(title: string): Promise<string> {
+  const encodedTitle = encodeURIComponent(title);
+  const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&titles=${encodedTitle}&format=json&origin=*`;
+
+  try {
+    const response = await fetch(apiUrl);
+    const data = await response.json();
+    const pages = data?.query?.pages || {};
+    const pageId = Object.keys(pages)[0];
+    
+    if (pageId && pages[pageId]) {
+      return pages[pageId].extract || '';
+    }
+    return '';
+  } catch (error) {
+    console.error(`Failed to get extract for ${title}:`, error);
+    return '';
+  }
+}
+
+/**
+ * Calculate domain credibility score based on citation count and reliability
+ * @param citationCount Number of Wikipedia citations
+ * @param reliability Reliability score from 0-1
+ * @returns Credibility score from 0-10
+ */
+export function calculateCredibilityScore(citationCount: number, reliability: number): number {
+  // High reliability domains (≥0.8) get a score of 8
+  if (reliability >= 0.8) {
+    return 8;
+  }
+  
+  // Low reliability domains (≤0.2) get a score of 2
+  if (reliability <= 0.2) {
+    return 2;
+  }
+  
+  // Moderate reliability domains (0.2-0.8) are scored based on citations
+  if (citationCount >= 100 && reliability >= 0.5) {
+    return 7; // Authoritative
+  } else if (citationCount >= 10 && reliability >= 0.3) {
+    return 4; // Moderate
+  } else {
+    return 3; // Limited
+  }
+}
+
+/**
+ * Maps credibility score to reliability category
+ * @param score Credibility score from 0-10
+ * @returns Reliability category
+ */
+export function mapScoreToCategory(score: number): 'highlyReliable' | 'moderatelyReliable' | 'unreliable' {
+  if (score >= 7) {
+    return 'highlyReliable';
+  } else if (score >= 4) {
+    return 'moderatelyReliable';
+  } else {
+    return 'unreliable';
+  }
+}
 
 /**
  * Evaluates the reliability level of a domain based on citation count
