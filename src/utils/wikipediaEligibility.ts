@@ -35,6 +35,27 @@ export function assessWikipediaEligibility(
   newsResults: SearchResult[] = [],
   domainCitations: Record<string, number> = {}
 ): WikipediaEligibilityResult {
+  // Check for existing Wikipedia page first with the improved function
+  const wikipediaCheck = checkForExistingWikipedia(query, [...organicResults, ...newsResults]);
+  
+  if (wikipediaCheck.exists) {
+    return {
+      eligible: true,
+      score: 100,
+      hasExistingWikipedia: true,
+      existingWikipediaUrl: wikipediaCheck.url,
+      reasons: ['The topic already has a Wikipedia page.'],
+      suggestedAction: 'This topic already has a Wikipedia page.',
+      reliableSources: {
+        highlyReliable: 0,
+        moderatelyReliable: 0,
+        unreliable: 0,
+        deprecated: 0
+      },
+      sourcesList: []
+    };
+  }
+  
   let score = 0;
   const reasons: string[] = [];
   let hasExistingWikipedia = false;
@@ -52,22 +73,6 @@ export function assessWikipediaEligibility(
   // Create a list to track all analyzed sources
   const sourcesList: AnalyzedSource[] = [];
 
-  // Check for existing Wikipedia article
-  const wikipediaResult = [...organicResults, ...newsResults].find(r => 
-    r.url.includes('wikipedia.org/wiki/') && 
-    !r.url.includes('wikipedia.org/wiki/Category:') &&
-    !r.url.includes('wikipedia.org/wiki/Wikipedia:') &&
-    !r.url.includes('wikipedia.org/wiki/Template:') &&
-    !r.url.includes('wikipedia.org/wiki/Portal:')
-  );
-  
-  if (wikipediaResult) {
-    hasExistingWikipedia = true;
-    existingWikipediaUrl = wikipediaResult.url;
-    score += 100; // Give maximum score for existing articles
-    reasons.push("Topic already has a Wikipedia article");
-  }
-  
   // Analyze sources from search results
   [...organicResults, ...newsResults].forEach(result => {
     // Exclude Wikipedia from source analysis
@@ -319,4 +324,97 @@ export function analyzeSourceReliability(sources: string[]) {
   });
 
   return result;
-} 
+}
+
+/**
+ * Improved function to check if a Wikipedia page already exists for a topic
+ */
+export const checkForExistingWikipedia = (
+  query: string, 
+  results: SearchResult[]
+): { exists: boolean; url: string | null } => {
+  // Normalize the query for comparison
+  const normalizedQuery = query.trim().toLowerCase().replace(/\s+/g, '_');
+  
+  // Find potential Wikipedia results
+  const wikipediaResults = results.filter(r => 
+    r.url.includes('wikipedia.org/wiki/') && 
+    // Exclude these types of pages that aren't actually about the topic
+    !r.url.includes('wikipedia.org/wiki/Category:') &&
+    !r.url.includes('wikipedia.org/wiki/List_of') &&
+    !r.url.includes('wikipedia.org/wiki/Template:') &&
+    !r.url.includes('wikipedia.org/wiki/Wikipedia:') &&
+    !r.url.includes('wikipedia.org/wiki/Help:') &&
+    !r.url.includes('wikipedia.org/wiki/Portal:') &&
+    !r.url.includes('wikipedia.org/wiki/Talk:') &&
+    !r.url.includes('wikipedia.org/wiki/File:')
+  );
+  
+  if (wikipediaResults.length === 0) {
+    return { exists: false, url: null };
+  }
+
+  // Extract the page title from the URL and normalize it
+  const matchedResults = wikipediaResults.filter(result => {
+    try {
+      // Get the Wikipedia page title from the URL path
+      const urlPath = new URL(result.url).pathname;
+      const pageTitleWithUnderscores = urlPath.split('/wiki/')[1];
+      
+      // If we can't extract a title, skip this result
+      if (!pageTitleWithUnderscores) return false;
+      
+      // Normalize the page title (decode URL components, replace underscores with spaces, lowercase)
+      const pageTitle = decodeURIComponent(pageTitleWithUnderscores)
+        .replace(/_/g, ' ')
+        .toLowerCase();
+      
+      // Check if the title contains the query keywords
+      const queryKeywords = normalizedQuery.replace(/_/g, ' ').split(' ');
+      
+      // For multi-word queries, check if most significant words are in the page title
+      // (Ignore common words like "the", "and", "of", etc.)
+      if (queryKeywords.length > 1) {
+        const significantKeywords = queryKeywords.filter(word => 
+          word.length > 2 && !['the', 'and', 'of', 'in', 'on', 'at', 'by', 'for', 'with', 'about'].includes(word)
+        );
+        
+        // Calculate what percentage of significant keywords are in the title
+        const matchCount = significantKeywords.filter(keyword => pageTitle.includes(keyword)).length;
+        const matchPercentage = significantKeywords.length > 0 
+          ? (matchCount / significantKeywords.length) 
+          : 0;
+        
+        // Require at least 70% of keywords to match for multi-word queries
+        return matchPercentage >= 0.7;
+      }
+      
+      // For single-word queries, the page title should start with the query or be very similar
+      return pageTitle.startsWith(normalizedQuery.replace(/_/g, ' ')) || 
+             pageTitle === normalizedQuery.replace(/_/g, ' ');
+    } catch (e) {
+      console.error('Error parsing Wikipedia URL:', e, result.url);
+      return false;
+    }
+  });
+  
+  // Check title similarity in search results
+  const titleMatch = wikipediaResults.find(result => {
+    const resultTitle = result.title.toLowerCase();
+    return resultTitle.includes(query.toLowerCase()) ||
+           resultTitle.includes(`${query.toLowerCase()} - wikipedia`);
+  });
+  
+  // Return the best match - either a URL match or a title match
+  if (matchedResults.length > 0) {
+    return { exists: true, url: matchedResults[0].url };
+  } else if (titleMatch) {
+    // Double-check if it's a disambiguation page
+    if (titleMatch.title.toLowerCase().includes('disambiguation')) {
+      return { exists: false, url: null };
+    }
+    return { exists: true, url: titleMatch.url };
+  }
+  
+  return { exists: false, url: null };
+}; 
