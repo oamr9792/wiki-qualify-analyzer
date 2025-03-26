@@ -413,9 +413,9 @@ export function UnifiedSearch() {
   }, [isLoading]);
 
   return (
-    <div className={`max-w-5xl w-full ${results.length > 0 ? 'h-screen' : ''} flex flex-col`}>
-      <Card className={`${results.length > 0 ? 'mb-4' : 'mb-0 w-full'} shadow-sm border-gray-200`}>
-        <CardContent className={`${results.length > 0 ? 'pt-4 pb-3' : 'py-10'}`}>
+    <div className={`max-w-5xl w-full ${results.length > 0 ? 'h-screen' : ''} flex flex-col p-0`}>
+      <Card className={`${results.length > 0 ? 'mb-4' : 'mb-0 w-full'} shadow-sm border-gray-200 p-0`}>
+        <CardContent className={`${results.length > 0 ? 'pt-4 pb-3' : 'py-6'}`}>
           <form onSubmit={handleSearch} className="flex flex-col gap-2">
             {/* Make search input and button stack on mobile */}
             <div className="flex flex-col sm:flex-row gap-2">
@@ -528,11 +528,11 @@ export function UnifiedSearch() {
               <TabsTrigger value="draft" className="whitespace-nowrap">Wikipedia Draft</TabsTrigger>
             </TabsList>
             
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-auto p-0">
               {/* Eligibility Tab */}
               <TabsContent value="eligibility" className="h-full overflow-auto m-0 p-0">
-                <Card className="h-full border-gray-200">
-                  <CardContent className="p-4">
+                <Card className="h-full border-gray-200 rounded-none">
+                  <CardContent className="p-2">
                     <WikipediaEligibility result={eligibilityResult} query={query} />
                   </CardContent>
                 </Card>
