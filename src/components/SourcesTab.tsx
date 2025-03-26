@@ -89,7 +89,7 @@ export function SourcesTab({ categorizedSources, sourcesList }: SourcesTabProps)
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="mb-2 text-xs text-gray-600 italic">
-                    These sources are from reliable domains but don't specifically mention the full search term.
+                    These sources are from reliable domains but don't seem to be specifically about the search term. This is evaluated by checking the title, URL, or metadescription of the content, and so may not be fully accurate.
                     <strong className="block mt-1">These are not counted for Wikipedia notability.</strong>
                   </div>
                   <ul className="text-sm space-y-1">
