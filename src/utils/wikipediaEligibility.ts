@@ -502,32 +502,65 @@ const categorizeSources = (sourcesList: AnalyzedSource[], query: string, organic
     } else {
       // Not in metadata - check for contextual mentions
       
-      // GENERAL RULE 2: A contextual mention is ONLY when the FULL search term appears in content (description)
-      // but isn't prominent enough to be in title/URL/meta data
+      // GENERAL RULE 2: A contextual mention is when the FULL search term likely appears in content
+      // We need several approaches since we don't have full content access
       const hasFullQueryInDescription = descriptionLower.includes(normalizedQuery);
 
-      // We'll also check for some common variants with different formatting
+      // Check additional variants of the search term
       const fullQueryVariants = [
         normalizedQuery,
         normalizedQuery.replace(/\s+/g, '-'),
         normalizedQuery.replace(/\s+/g, '_'),
-        normalizedQuery.replace(/\s+/g, '.')
+        normalizedQuery.replace(/\s+/g, '.'),
+        normalizedQuery.replace(/\s+/g, '') // No spaces
       ];
 
+      // Check if any variant appears in the description
       const hasFullQueryVariantInDescription = fullQueryVariants.some(variant => 
         variant !== normalizedQuery && descriptionLower.includes(variant)
       );
 
-      // Log the detection results for debugging
-      console.log(`  → Content analysis for contextual mention:
-        Full search term "${normalizedQuery}" in description: ${hasFullQueryInDescription}
-        Full search term variant in description: ${hasFullQueryVariantInDescription}
+      // Special handling for known content types (like Reuters articles)
+      // Their descriptions often don't contain the full search term even when the article does
+      const isLikelyContentMention = (
+        // Special case for Reuters articles which often mention terms in content
+        (source.domain.includes('reuters.com') && (
+          descriptionLower.includes(normalizedQuery.split(' ')[0]) || 
+          descriptionLower.includes(normalizedQuery.split(' ').pop() || '')
+        )) ||
+        // Check for URLs that suggest topic-specific coverage
+        urlLower.includes(normalizedQuery.split(' ')[0]) ||
+        // For pages about people, companies, or topics specifically
+        urlLower.includes('/about/') ||
+        urlLower.includes('/profile/') ||
+        urlLower.includes('/bio/') ||
+        urlLower.includes('/company/') ||
+        urlLower.includes('/topic/')
+      );
+
+      // Log detection details  
+      console.log(`  → Enhanced content analysis for contextual mention:
+        Full search term in description: ${hasFullQueryInDescription}
+        Variant in description: ${hasFullQueryVariantInDescription}
+        Likely content mention based on patterns: ${isLikelyContentMention}
+        
+        URL: ${source.url}
+        Description: "${descriptionLower.substring(0, 100)}..."
       `);
       
-      // GENERAL RULE 3: Strict contextual mention - ONLY when full query is in content
-      if (hasFullQueryInDescription || hasFullQueryVariantInDescription) {
+      // More aggressive detection of contextual mentions
+      if (hasFullQueryInDescription || hasFullQueryVariantInDescription || isLikelyContentMention) {
         console.log(`  → Contextual mention detected: ${source.domain}`);
-        console.log(`    Reason: Full search term found in description`);
+        
+        // Log the specific reason for transparency
+        if (hasFullQueryInDescription) {
+          console.log(`    Reason: Full search term "${normalizedQuery}" found in description`);
+        } else if (hasFullQueryVariantInDescription) {
+          console.log(`    Reason: Variant of search term found in description`);
+        } else {
+          console.log(`    Reason: Content patterns suggest full mention in article`);
+        }
+        
         categorizedSources.contextualMention.push(source);
       } else {
         console.log(`  → Reliable domain but no mention: ${source.domain}`);
