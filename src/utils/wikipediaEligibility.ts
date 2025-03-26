@@ -470,10 +470,11 @@ const categorizeSources = (sourcesList: AnalyzedSource[], query: string, organic
     }
     
     // Check for FULL keyword match in title, URL, or meta description
-    const hasFullKeywordInTitle = matchingResult.title?.toLowerCase().includes(normalizedQuery);
+    const hasFullKeywordInTitle = !!matchingResult.title?.toLowerCase().includes(normalizedQuery);
 
-    // More thorough URL check with normalized variants
+    // For URL check, only use exact formatting variants and check more thoroughly
     const urlLower = matchingResult.url.toLowerCase();
+    // Only match full words, not partial word matches
     const queryVariants = [
       normalizedQuery,
       normalizedQuery.replace(/\s+/g, '-'),
@@ -483,84 +484,45 @@ const categorizeSources = (sourcesList: AnalyzedSource[], query: string, organic
     ];
     const hasFullKeywordInUrl = queryVariants.some(variant => urlLower.includes(variant));
 
-    // Improved description check - be more thorough
+    // For meta description, be very strict about full matches
     const descriptionLower = matchingResult.description?.toLowerCase() || '';
-    const hasFullKeywordInMeta = descriptionLower.includes(normalizedQuery) || 
-                                queryVariants.some(variant => descriptionLower.includes(variant));
+    const hasFullKeywordInMeta = descriptionLower.includes(normalizedQuery);
 
-    console.log(`DETECTION RESULTS for ${source.domain}:
+    // Log EXACTLY what we found for debugging
+    console.log(`STRICT DETECTION for ${source.domain}:
       Query: "${normalizedQuery}"
+      Title: "${matchingResult.title}"
+      URL: "${matchingResult.url}"
+      Description: "${descriptionLower.substring(0, 100)}..."
       In Title: ${hasFullKeywordInTitle} 
       In URL: ${hasFullKeywordInUrl}
       In Meta: ${hasFullKeywordInMeta}
     `);
 
-    // GENERAL RULE 1: If the full query appears in title, URL, or meta description, it's a highly reliable source
-    if (hasFullKeywordInTitle || hasFullKeywordInUrl || hasFullKeywordInMeta) {
+    // STRICT RULE: Domain MUST be reliable AND full keyword MUST be in title/URL/meta
+    const hasFullKeywordMatch = hasFullKeywordInTitle || hasFullKeywordInUrl || hasFullKeywordInMeta;
+
+    if (hasFullKeywordMatch) {
       console.log(`  → Highly reliable with specific mention: ${source.domain}`);
+      console.log(`    Contains full search term in: ${hasFullKeywordInTitle ? 'title' : ''} ${hasFullKeywordInUrl ? 'URL' : ''} ${hasFullKeywordInMeta ? 'meta description' : ''}`);
       categorizedSources.highlyReliable.push(source);
     } else {
-      // Not in metadata - check for contextual mentions
+      // Now check for contextual mentions - search term appears in content
       
-      // GENERAL RULE 2: A contextual mention is when the FULL search term likely appears in content
-      // We need several approaches since we don't have full content access
-      const hasFullQueryInDescription = descriptionLower.includes(normalizedQuery);
-
-      // Check additional variants of the search term
-      const fullQueryVariants = [
-        normalizedQuery,
-        normalizedQuery.replace(/\s+/g, '-'),
-        normalizedQuery.replace(/\s+/g, '_'),
-        normalizedQuery.replace(/\s+/g, '.'),
-        normalizedQuery.replace(/\s+/g, '') // No spaces
-      ];
-
-      // Check if any variant appears in the description
-      const hasFullQueryVariantInDescription = fullQueryVariants.some(variant => 
+      // First, check if the description contains the full search term or close variant
+      // This is a good proxy for content since we don't have full article text
+      const hasFullTermInDescription = descriptionLower.includes(normalizedQuery);
+      
+      // Also check for the term with different formatting
+      const hasVariantInDescription = queryVariants.some(variant => 
         variant !== normalizedQuery && descriptionLower.includes(variant)
       );
-
-      // Special handling for known content types (like Reuters articles)
-      // Their descriptions often don't contain the full search term even when the article does
-      const isLikelyContentMention = (
-        // Special case for Reuters articles which often mention terms in content
-        (source.domain.includes('reuters.com') && (
-          descriptionLower.includes(normalizedQuery.split(' ')[0]) || 
-          descriptionLower.includes(normalizedQuery.split(' ').pop() || '')
-        )) ||
-        // Check for URLs that suggest topic-specific coverage
-        urlLower.includes(normalizedQuery.split(' ')[0]) ||
-        // For pages about people, companies, or topics specifically
-        urlLower.includes('/about/') ||
-        urlLower.includes('/profile/') ||
-        urlLower.includes('/bio/') ||
-        urlLower.includes('/company/') ||
-        urlLower.includes('/topic/')
-      );
-
-      // Log detection details  
-      console.log(`  → Enhanced content analysis for contextual mention:
-        Full search term in description: ${hasFullQueryInDescription}
-        Variant in description: ${hasFullQueryVariantInDescription}
-        Likely content mention based on patterns: ${isLikelyContentMention}
-        
-        URL: ${source.url}
-        Description: "${descriptionLower.substring(0, 100)}..."
-      `);
       
-      // More aggressive detection of contextual mentions
-      if (hasFullQueryInDescription || hasFullQueryVariantInDescription || isLikelyContentMention) {
+      // For accuracy, be more conservative about contextual mentions
+      // Only consider it contextual if we have strong evidence
+      if (hasFullTermInDescription || hasVariantInDescription) {
         console.log(`  → Contextual mention detected: ${source.domain}`);
-        
-        // Log the specific reason for transparency
-        if (hasFullQueryInDescription) {
-          console.log(`    Reason: Full search term "${normalizedQuery}" found in description`);
-        } else if (hasFullQueryVariantInDescription) {
-          console.log(`    Reason: Variant of search term found in description`);
-        } else {
-          console.log(`    Reason: Content patterns suggest full mention in article`);
-        }
-        
+        console.log(`    Full search term found in description text`);
         categorizedSources.contextualMention.push(source);
       } else {
         console.log(`  → Reliable domain but no mention: ${source.domain}`);

@@ -360,53 +360,57 @@ export function UnifiedSearch() {
     }
   };
 
-  // Add this effect to handle staged loading animation
+  // Update the loading animation
   useEffect(() => {
-    if (!isLoading) {
-      // Reset progress when not loading
+    if (isLoading) {
+      // Reset loading state when search starts
       setLoadingStage(0);
       setLoadingProgress(0);
-      return;
-    }
-
-    let stageTimer: NodeJS.Timeout;
-    let progressTimer: NodeJS.Timeout;
-    let currentProgress = 0;
-    
-    // Advance to next stage
-    const advanceStage = (stage: number) => {
-      if (stage >= loadingStages.length) return;
       
-      setLoadingStage(stage);
-      currentProgress = 0;
-      setLoadingProgress(0);
+      // Create animation through the loading stages
+      const intervals: NodeJS.Timeout[] = [];
       
-      // Set timer for next stage
-      stageTimer = setTimeout(() => {
-        advanceStage(stage + 1);
-      }, loadingStages[stage].duration);
-      
-      // Update progress within this stage
-      const progressInterval = 50; // Update every 50ms
-      const incrementAmount = 100 / (loadingStages[stage].duration / progressInterval);
-      
-      progressTimer = setInterval(() => {
-        currentProgress += incrementAmount;
-        setLoadingProgress(Math.min(currentProgress, 100));
+      // For each loading stage
+      loadingStages.forEach((stage, index) => {
+        // Calculate delay for this stage
+        const previousDuration = loadingStages
+          .slice(0, index)
+          .reduce((sum, s) => sum + s.duration, 0);
         
-        if (currentProgress >= 100) clearInterval(progressTimer);
-      }, progressInterval);
-    };
-    
-    // Start the animation
-    advanceStage(0);
-    
-    // Cleanup timers
-    return () => {
-      clearTimeout(stageTimer);
-      clearInterval(progressTimer);
-    };
-  }, [isLoading, loadingStages]);
+        // Start this stage after previous ones finish
+        const stageInterval = setTimeout(() => {
+          setLoadingStage(index);
+          
+          // Animate progress within this stage
+          const progressInterval = setInterval(() => {
+            setLoadingProgress(prev => {
+              // Calculate target progress for this stage
+              const stageProgress = (index + 1) / loadingStages.length * 100;
+              const prevStageProgress = index / loadingStages.length * 100;
+              const increment = (stageProgress - prevStageProgress) / 10;
+              
+              const newProgress = prev + increment;
+              
+              // Stop when we reach target for this stage
+              if (newProgress >= stageProgress) {
+                clearInterval(progressInterval);
+                return stageProgress;
+              }
+              
+              return newProgress;
+            });
+          }, stage.duration / 10);
+          
+          intervals.push(progressInterval);
+        }, previousDuration);
+        
+        intervals.push(stageInterval);
+      });
+      
+      // Cleanup function
+      return () => intervals.forEach(interval => clearInterval(interval));
+    }
+  }, [isLoading]);
 
   return (
     <div className={`max-w-5xl w-full ${results.length > 0 ? 'h-screen' : ''} flex flex-col`}>
@@ -424,21 +428,15 @@ export function UnifiedSearch() {
               />
               <Button 
                 type="submit" 
-                disabled={isLoading}
-                className="bg-[#17163e] hover:bg-[#232253] text-white font-medium mt-2 sm:mt-0"
-                size={results.length > 0 ? "default" : "lg"}
+                disabled={isLoading || isRateLimited || !query.trim()} 
+                className="ml-2 bg-[#17163e] hover:bg-[#232253] text-white"
               >
                 {isLoading ? (
-                  <span className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-t-transparent border-white"></div>
-                    <span className="sr-only">Analyzing...</span>
-                  </span>
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <span className="flex items-center gap-2">
-                    <Shield className="h-4 w-4" />
-                    Analyse
-                  </span>
+                  <Globe className="h-4 w-4" />
                 )}
+                <span className="ml-2">{isLoading ? "Analyzing..." : "Analyze"}</span>
               </Button>
             </div>
             
