@@ -82,14 +82,32 @@ export function UnifiedSearch() {
   // Assess Wikipedia eligibility whenever search results update
   useEffect(() => {
     if (!isLoading && results.length > 0 && searchedQuery) {
-      const eligibilityResult = assessWikipediaEligibility(
-        searchedQuery,
-        results,
-        newsResults,
-        domainCitations
+      // Debug logging
+      console.log(`Results found: ${results.length} organic, ${newsResults.length} news`);
+      console.log("Checking for Wikipedia article in results:");
+      
+      // RESTORE THE ORIGINAL WIKIPEDIA CHECK LOGIC
+      const wikipediaResult = [...results, ...newsResults].find(r => 
+        r.url.includes('wikipedia.org/wiki/') && 
+        !r.url.includes('wikipedia.org/wiki/Category:') &&
+        !r.url.includes('wikipedia.org/wiki/Wikipedia:') &&
+        !r.url.includes('wikipedia.org/wiki/Template:') &&
+        !r.url.includes('wikipedia.org/wiki/Help:') &&
+        !r.url.includes('wikipedia.org/wiki/Portal:') &&
+        !r.url.includes('wikipedia.org/wiki/Talk:') &&
+        !r.url.includes('wikipedia.org/wiki/File:')
       );
       
-      setEligibilityResult(eligibilityResult);
+      if (wikipediaResult) {
+        console.log("Wikipedia article found:", wikipediaResult.url);
+      } else {
+        console.log("No Wikipedia article found in results");
+      }
+      
+      // Pass domainCitations to the assessment function
+      const assessment = assessWikipediaEligibility(searchedQuery, results, newsResults, domainCitations);
+      console.log("Eligibility assessment:", assessment);
+      setEligibilityResult(assessment);
     }
   }, [isLoading, results, newsResults, domainCitations, searchedQuery]);
 
