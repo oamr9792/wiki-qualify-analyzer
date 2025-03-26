@@ -104,7 +104,7 @@ export function CalendlyEmbed({ score }: CalendlyEmbedProps) {
             
             <div className="mt-6 text-center">
               <p className="mb-4 text-gray-700">
-                Email us at <a href="mailto:info@wikipublisher.com" className="text-blue-600 hover:underline">info@wikipublisher.com</a>
+                Email us at <a href="mailto:orani@reputationcitadel.com" className="text-blue-600 hover:underline">orani@reputationcitadel.com</a>
               </p>
               <Button 
                 onClick={() => setShowPopup(false)}

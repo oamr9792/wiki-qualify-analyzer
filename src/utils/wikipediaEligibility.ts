@@ -469,63 +469,77 @@ const categorizeSources = (sourcesList: AnalyzedSource[], query: string, organic
       return;
     }
     
-    // Check for FULL keyword match in title, URL, or meta description
-    const hasFullKeywordInTitle = !!matchingResult.title?.toLowerCase().includes(normalizedQuery);
+    // Check for FULL keyword match in title, URL, or meta description - using EXACT matching
+    const hasFullKeywordInTitle = matchingResult.title?.toLowerCase().includes(normalizedQuery);
 
-    // For URL check, only use exact formatting variants and check more thoroughly
+    // For URL check, be much more strict about how we detect the keyword
     const urlLower = matchingResult.url.toLowerCase();
-    // Only match full words, not partial word matches
-    const queryVariants = [
+    // Only use limited URL variants to prevent false positives
+    const urlVariants = [
       normalizedQuery,
       normalizedQuery.replace(/\s+/g, '-'),
-      normalizedQuery.replace(/\s+/g, '_'),
-      normalizedQuery.replace(/\s+/g, '+'),
-      normalizedQuery.replace(/\s+/g, '')
+      normalizedQuery.replace(/\s+/g, '_') 
     ];
-    const hasFullKeywordInUrl = queryVariants.some(variant => urlLower.includes(variant));
 
-    // For meta description, be very strict about full matches
+    // Use word boundary checks for URL to avoid partial matches
+    const hasFullKeywordInUrl = urlVariants.some(variant => {
+      // Check if the URL contains the variant with word boundaries
+      // This helps prevent partial word matches
+      return (
+        // URL contains the exact variant
+        urlLower.includes('/' + variant + '/') || 
+        urlLower.includes('/' + variant + '.') ||
+        urlLower.endsWith('/' + variant) ||
+        // Or it's part of the domain (for branded domains)
+        urlLower.includes(variant + '.com') ||
+        urlLower.includes(variant + '.org') ||
+        urlLower.includes(variant + '.net')
+      );
+    });
+
+    // For meta description, require EXACT full match
     const descriptionLower = matchingResult.description?.toLowerCase() || '';
+    // Only count as a match if the EXACT normalized query is in the description
     const hasFullKeywordInMeta = descriptionLower.includes(normalizedQuery);
 
-    // Log EXACTLY what we found for debugging
-    console.log(`STRICT DETECTION for ${source.domain}:
+    // Add super detailed logging to debug the matches
+    console.log(`🔍 STRICT DETECTION for ${source.domain}:
       Query: "${normalizedQuery}"
       Title: "${matchingResult.title}"
-      URL: "${matchingResult.url}"
+      URL: "${matchingResult.url}" 
       Description: "${descriptionLower.substring(0, 100)}..."
-      In Title: ${hasFullKeywordInTitle} 
-      In URL: ${hasFullKeywordInUrl}
-      In Meta: ${hasFullKeywordInMeta}
+      
+      Title includes exact query: ${hasFullKeywordInTitle}
+      URL includes exact query variants: ${hasFullKeywordInUrl}
+      Meta includes exact query: ${hasFullKeywordInMeta}
+      
+      Result: ${(hasFullKeywordInTitle || hasFullKeywordInUrl || hasFullKeywordInMeta) ? 'RELIABLE SOURCE' : 'NOT A RELIABLE SOURCE'}
     `);
 
-    // STRICT RULE: Domain MUST be reliable AND full keyword MUST be in title/URL/meta
-    const hasFullKeywordMatch = hasFullKeywordInTitle || hasFullKeywordInUrl || hasFullKeywordInMeta;
-
-    if (hasFullKeywordMatch) {
-      console.log(`  → Highly reliable with specific mention: ${source.domain}`);
-      console.log(`    Contains full search term in: ${hasFullKeywordInTitle ? 'title' : ''} ${hasFullKeywordInUrl ? 'URL' : ''} ${hasFullKeywordInMeta ? 'meta description' : ''}`);
+    // VERY STRICT RULE: full keyword MUST be in title/URL/meta EXACTLY as searched
+    if (hasFullKeywordInTitle || hasFullKeywordInUrl || hasFullKeywordInMeta) {
+      console.log(`  ✅ RELIABLE SOURCE: ${source.domain}`);
+      console.log(`    Contains EXACT search term "${normalizedQuery}" in: ${hasFullKeywordInTitle ? 'TITLE' : ''} ${hasFullKeywordInUrl ? 'URL' : ''} ${hasFullKeywordInMeta ? 'META' : ''}`);
       categorizedSources.highlyReliable.push(source);
     } else {
-      // Now check for contextual mentions - search term appears in content
+      // If not in metadata, check for contextual mentions
       
-      // First, check if the description contains the full search term or close variant
-      // This is a good proxy for content since we don't have full article text
-      const hasFullTermInDescription = descriptionLower.includes(normalizedQuery);
+      // Only consider it a contextual mention if the FULL search term appears in description
+      const hasExactTermInDescription = descriptionLower.includes(normalizedQuery);
       
-      // Also check for the term with different formatting
-      const hasVariantInDescription = queryVariants.some(variant => 
-        variant !== normalizedQuery && descriptionLower.includes(variant)
-      );
+      // Check for common variants only for multi-word queries
+      const hasVariantInDescription = normalizedQuery.includes(' ') && 
+        urlVariants.some(variant => 
+          variant !== normalizedQuery && descriptionLower.includes(variant)
+        );
       
-      // For accuracy, be more conservative about contextual mentions
-      // Only consider it contextual if we have strong evidence
-      if (hasFullTermInDescription || hasVariantInDescription) {
-        console.log(`  → Contextual mention detected: ${source.domain}`);
-        console.log(`    Full search term found in description text`);
+      if (hasExactTermInDescription || hasVariantInDescription) {
+        console.log(`  ⚠️ CONTEXTUAL MENTION: ${source.domain}`);
+        console.log(`    Full search term found in description text but not in title/URL/meta`);
         categorizedSources.contextualMention.push(source);
       } else {
-        console.log(`  → Reliable domain but no mention: ${source.domain}`);
+        console.log(`  ❌ NO MENTION: ${source.domain}`);
+        console.log(`    No evidence of full search term mention`);
         categorizedSources.reliableNoMention.push(source);
       }
     }

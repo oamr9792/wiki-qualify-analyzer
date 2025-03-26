@@ -518,7 +518,7 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
                   identify the best sources to cite, and ensure you approach the process the right way—from draft to approval.
                 </p>
                 <Button 
-                  onClick={() => window.open('mailto:info@wikipublisher.com')}
+                  onClick={() => window.open('mailto:orani@reputationcitadel.com')}
                   className="mb-6 bg-blue-900 hover:bg-blue-800 text-white font-medium"
                 >
                   Contact us for a consultation
@@ -536,7 +536,7 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
                   identify the best sources to cite, and ensure you approach the process the right way—from draft to approval.
                 </p>
                 <Button 
-                  onClick={() => window.open('mailto:info@wikipublisher.com')}
+                  onClick={() => window.open('mailto:orani@reputationcitadel.com')}
                   className="mb-6 bg-blue-900 hover:bg-blue-800 text-white font-medium"
                 >
                   Contact us for a consultation
@@ -555,7 +555,7 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
                   fill in the missing gaps, and get closer to Wikipedia eligibility without wasting time or money.
                 </p>
                 <Button 
-                  onClick={() => window.open('mailto:info@wikipublisher.com')}
+                  onClick={() => window.open('mailto:orani@reputationcitadel.com')}
                   className="mb-6 bg-blue-900 hover:bg-blue-800 text-white font-medium"
                 >
                   Contact us for a consultation
@@ -577,7 +577,7 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
                   and reputation—so you're ready for Wikipedia when it counts.
                 </p>
                 <Button 
-                  onClick={() => window.open('mailto:info@wikipublisher.com')}
+                  onClick={() => window.open('mailto:orani@reputationcitadel.com')}
                   className="mb-6 bg-blue-900 hover:bg-blue-800 text-white font-medium"
                 >
                   Contact us for a consultation
@@ -591,7 +591,7 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
       {/* For low-score topics that don't show a draft, show Calendly too */}
       {!hasExistingWikipedia && score < 65 && (
         <div className="mt-6">
-          <Button onClick={() => window.open('mailto:info@wikipublisher.com')}>Contact Us</Button>
+          <Button onClick={() => window.open('mailto:orani@reputationcitadel.com')}>Contact Us</Button>
         </div>
       )}
     </div>
