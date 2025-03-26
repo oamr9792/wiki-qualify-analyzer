@@ -265,6 +265,17 @@ export function assessWikipediaEligibility(
     suggestedAction = "Topic likely does not meet Wikipedia's notability guidelines";
   }
   
+  // Count reliable sources
+  const totalReliableSources = 
+    reliableSources.highlyReliable + reliableSources.moderatelyReliable;
+  
+  // Cap score at 15 if there are zero reliable sources
+  if (totalReliableSources === 0 && score > 15) {
+    score = 15;
+    reasons.push("Insufficient reliable sources found. Topics need coverage in reliable sources to establish notability.");
+    eligible = false;
+  }
+  
   return {
     eligible,
     score: displayScore, // Return the more generous display score

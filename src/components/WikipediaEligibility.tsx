@@ -107,7 +107,7 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
   if (result.hasExistingWikipedia && result.existingWikipediaUrl) {
     return (
       <div className="mb-6">
-        <Alert variant="default" className="bg-green-50 border-green-200">
+        <Alert variant="default" className="bg-green-50 border-green-200 mb-4">
           <div className="flex items-center">
             <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
             <div>
@@ -125,6 +125,26 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
             </div>
           </div>
         </Alert>
+        
+        {/* New CTA for existing Wikipedia pages */}
+        <div className="mt-6 border rounded-md p-4 bg-gray-50">
+          <h2 className="text-xl font-medium mb-3">Spotted an issue?</h2>
+          <div className="space-y-3 text-sm text-gray-600">
+            <p>
+              If you think this Wikipedia page has any mistakes or outdated information, we might be able to help. 
+              Schedule a meeting today to find out more about our ethical editing practices.
+            </p>
+          </div>
+          <div className="mt-4">
+            <Button 
+              onClick={openCalendlyPopup}
+              className="w-full bg-[#17163e] hover:bg-[#232253] text-white"
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Schedule a Free Consultation
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
