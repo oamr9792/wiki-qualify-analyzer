@@ -534,6 +534,14 @@ export function UnifiedSearch() {
                 <Card className="h-full border-gray-200 rounded-none">
                   <CardContent className="p-2">
                     <WikipediaEligibility result={eligibilityResult} query={query} />
+                    
+                    {/* Add disclaimer at bottom of analysis */}
+                    <div className="mt-6 text-xs text-gray-500 border-t pt-3 text-center">
+                      <p>
+                        <strong>Disclaimer:</strong> This analysis is an estimate and is not a guarantee of Wikipedia eligibility (or lack thereof).
+                        Wikipedia's standards and editor interpretations may vary.
+                      </p>
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>
