@@ -23,6 +23,7 @@ export function UnifiedSearch() {
   const [modifierKeyword2, setModifierKeyword2] = useState('');
   const [activeTab, setActiveTab] = useState('organic');
   const [eligibilityResult, setEligibilityResult] = useState<WikipediaEligibilityResult | null>(null);
+  const [searchedQuery, setSearchedQuery] = useState('');
   
   const { 
     results, 
@@ -80,30 +81,17 @@ export function UnifiedSearch() {
 
   // Assess Wikipedia eligibility whenever search results update
   useEffect(() => {
-    if (results.length > 0 || newsResults.length > 0) {
-      // Debug logging
-      console.log(`Results found: ${results.length} organic, ${newsResults.length} news`);
-      console.log("Checking for Wikipedia article in results:");
-      
-      const wikipediaResult = [...results, ...newsResults].find(r => 
-        r.url.includes('wikipedia.org/wiki/') && 
-        !r.url.includes('wikipedia.org/wiki/Category:')
+    if (!isLoading && results.length > 0 && searchedQuery) {
+      const eligibilityResult = assessWikipediaEligibility(
+        searchedQuery,
+        results,
+        newsResults,
+        domainCitations
       );
       
-      if (wikipediaResult) {
-        console.log("Wikipedia article found:", wikipediaResult.url);
-      } else {
-        console.log("No Wikipedia article found in results");
-      }
-      
-      // Pass domainCitations to the assessment function
-      const assessment = assessWikipediaEligibility(query, results, newsResults, domainCitations);
-      console.log("Eligibility assessment:", assessment);
-      setEligibilityResult(assessment);
-    } else {
-      setEligibilityResult(null);
+      setEligibilityResult(eligibilityResult);
     }
-  }, [results, newsResults, query, domainCitations]);
+  }, [isLoading, results, newsResults, domainCitations, searchedQuery]);
 
   // Fix the useEffect that gets the user IP and checks admin mode
   useEffect(() => {
@@ -156,32 +144,39 @@ export function UnifiedSearch() {
     
     if (!query.trim()) return;
     
-    // Check if search is allowed
-    if (!isSearchAllowed()) {
-      const timeUntilReset = getReadableTimeUntilReset();
-      setErrorMessage(`You've reached the search limit. Please try again in ${timeUntilReset}.`);
-      return;
+    try {
+      // Store the current query as the searched query
+      setSearchedQuery(query);
+      
+      // Check if search is allowed
+      if (!isSearchAllowed()) {
+        const timeUntilReset = getReadableTimeUntilReset();
+        setErrorMessage(`You've reached the search limit. Please try again in ${timeUntilReset}.`);
+        return;
+      }
+      
+      // Build search query with modifiers
+      let searchQuery = query.trim();
+      if (modifierKeyword1.trim()) {
+        searchQuery += ` ${modifierKeyword1.trim()}`;
+      }
+      if (modifierKeyword2.trim()) {
+        searchQuery += ` ${modifierKeyword2.trim()}`;
+      }
+      
+      console.log("Searching for:", searchQuery);
+      
+      // Increment the search count
+      incrementSearchCount();
+      
+      // Update remaining searches
+      setRemainingSearches(getRemainingSearches());
+      
+      // Continue with search
+      await searchGoogle(searchQuery);
+    } catch (error) {
+      console.error("Search error:", error);
     }
-    
-    // Build search query with modifiers
-    let searchQuery = query.trim();
-    if (modifierKeyword1.trim()) {
-      searchQuery += ` ${modifierKeyword1.trim()}`;
-    }
-    if (modifierKeyword2.trim()) {
-      searchQuery += ` ${modifierKeyword2.trim()}`;
-    }
-    
-    console.log("Searching for:", searchQuery);
-    
-    // Increment the search count
-    incrementSearchCount();
-    
-    // Update remaining searches
-    setRemainingSearches(getRemainingSearches());
-    
-    // Continue with search
-    await searchGoogle(searchQuery);
   };
 
   // Helper function to extract domain from URL
@@ -533,12 +528,12 @@ export function UnifiedSearch() {
               <TabsContent value="eligibility" className="h-full overflow-auto m-0 p-0">
                 <Card className="h-full border-gray-200 rounded-none">
                   <CardContent className="p-2">
-                    <WikipediaEligibility result={eligibilityResult} query={query} />
+                    <WikipediaEligibility result={eligibilityResult} query={searchedQuery} />
                     
                     {/* Add disclaimer at bottom of analysis */}
                     <div className="mt-6 text-xs text-gray-500 border-t pt-3 text-center">
                       <p>
-                        <strong>Disclaimer:</strong> This analysis is an estimate and is not a guarantee of Wikipedia eligibility (or lack thereof).
+                        <strong>Disclaimer:</strong> This analysis is an estimate and not a guarantee of Wikipedia eligibility (or lack thereof).
                         Wikipedia's standards and editor interpretations may vary.
                       </p>
                     </div>
@@ -582,19 +577,14 @@ export function UnifiedSearch() {
                     </div>
                     
                     <WikipediaArticleDraft 
-                      query={query}
-                      sources={[...results, ...newsResults].map(result => ({
-                        ...result,
-                        domain: result.url ? new URL(result.url).hostname : '',
-                        reliability: 'unknown',
-                        category: 'moderatelyReliable',
-                        relevance: 'high'
-                      }))}
+                      query={searchedQuery}
+                      sources={eligibilityResult?.sourcesList || []}
                       results={results}
                       newsResults={newsResults}
                       eligible={eligibilityResult?.eligible || false}
                       hasExistingWikipedia={eligibilityResult?.hasExistingWikipedia || false}
                       score={eligibilityResult?.score || 0}
+                      existingWikipediaUrl={eligibilityResult?.existingWikipediaUrl}
                     />
                   </CardContent>
                 </Card>
