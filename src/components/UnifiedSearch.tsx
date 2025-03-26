@@ -15,6 +15,7 @@ import { CitationCount } from '@/components/CitationCount';
 import { getEffectiveDomain } from '@/utils/domainUtils';
 import { WikipediaArticleDraft } from '@/components/WikipediaArticleDraft';
 import { isSearchAllowed, incrementSearchCount, getRemainingSearches, getTimeUntilReset, getReadableTimeUntilReset } from '@/services/rateLimitService';
+import { SourcesTab } from '@/components/SourcesTab';
 
 export function UnifiedSearch() {
   const [query, setQuery] = useState('');
@@ -435,7 +436,7 @@ export function UnifiedSearch() {
                 ) : (
                   <span className="flex items-center gap-2">
                     <Shield className="h-4 w-4" />
-                    Analyze
+                    Analyse
                   </span>
                 )}
               </Button>
@@ -541,187 +542,12 @@ export function UnifiedSearch() {
               
               {/* Sources Tab */}
               <TabsContent value="sources" className="h-full overflow-auto m-0 p-0">
-                <Card className="h-full border-gray-200">
-                  <CardContent className="p-4">
-                    <div className="space-y-4">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
-                        <h3 className="text-lg font-medium mb-2 sm:mb-0">Source Analysis</h3>
-                        
-                        <Button 
-                          onClick={() => {
-                            if (typeof window !== 'undefined' && window.Calendly) {
-                              window.Calendly.initPopupWidget({
-                                url: 'https://calendly.com/orani/30min'
-                              });
-                            } else {
-                              window.open('https://calendly.com/orani/30min', '_blank');
-                            }
-                          }}
-                          className="bg-[#17163e] hover:bg-[#232253] text-white w-full sm:w-auto"
-                          size="sm"
-                        >
-                          <Calendar className="h-4 w-4 mr-2" />
-                          Book Consultation
-                        </Button>
-                      </div>
-                      
-                      {eligibilityResult && (
-                        <div className="space-y-3">
-                          {/* Source Statistics - make responsive on mobile */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-                            <div className="border p-2 rounded">
-                              <div className="text-xs text-gray-600">Reliable</div>
-                              <div className="font-bold">
-                                {eligibilityResult.sourcesList.filter(s => s.category === 'highlyReliable').length}
-                              </div>
-                            </div>
-                            <div className="border p-2 rounded">
-                              <div className="text-xs text-gray-600">Moderate</div>
-                              <div className="font-bold">
-                                {eligibilityResult.sourcesList.filter(s => s.category === 'moderatelyReliable').length}
-                              </div>
-                            </div>
-                            <div className="border p-2 rounded">
-                              <div className="text-xs text-gray-600">Unreliable</div>
-                              <div className="font-bold">
-                                {eligibilityResult.sourcesList.filter(s => s.category === 'unreliable').length}
-                              </div>
-                            </div>
-                            <div className="border p-2 rounded">
-                              <div className="text-xs text-gray-600">Deprecated</div>
-                              <div className="font-bold">
-                                {eligibilityResult.sourcesList.filter(s => s.category === 'deprecated').length}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Collapsible Source Lists - Exact copy from WikipediaEligibility */}
-                          <Accordion type="multiple" className="w-full">
-                            {eligibilityResult.sourcesList.filter(s => s.category === 'highlyReliable').length > 0 && (
-                              <AccordionItem value="highlyReliable" className="border-b">
-                                <AccordionTrigger className="text-sm py-2">
-                                  <span className="flex items-center">
-                                    <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
-                                    {eligibilityResult.sourcesList.filter(s => s.category === 'highlyReliable').length} Highly Reliable Sources
-                                  </span>
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                  <ul className="text-sm space-y-1">
-                                    {eligibilityResult.sourcesList.filter(s => s.category === 'highlyReliable').map((source, idx) => (
-                                      <li key={idx} className="flex items-start">
-                                        <span className="text-gray-400 mr-1">•</span>
-                                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                                          {source.domain}
-                                        </a>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </AccordionContent>
-                              </AccordionItem>
-                            )}
-                            
-                            {/* Similar structure for other categories */}
-                            {/* Moderately Reliable */}
-                            {eligibilityResult.sourcesList.filter(s => s.category === 'moderatelyReliable').length > 0 && (
-                              <AccordionItem value="moderatelyReliable" className="border-b">
-                                <AccordionTrigger className="text-sm py-2">
-                                  <span className="flex items-center">
-                                    <HelpCircle className="h-4 w-4 mr-2 text-blue-500" />
-                                    {eligibilityResult.sourcesList.filter(s => s.category === 'moderatelyReliable').length} Moderately Reliable Sources
-                                  </span>
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                  <ul className="text-sm space-y-1">
-                                    {eligibilityResult.sourcesList.filter(s => s.category === 'moderatelyReliable').map((source, idx) => (
-                                      <li key={idx} className="flex items-start">
-                                        <span className="text-gray-400 mr-1">•</span>
-                                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                                          {source.domain}
-                                        </a>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </AccordionContent>
-                              </AccordionItem>
-                            )}
-                            
-                            {/* Unreliable */}
-                            {eligibilityResult.sourcesList.filter(s => s.category === 'unreliable').length > 0 && (
-                              <AccordionItem value="unreliable" className="border-b">
-                                <AccordionTrigger className="text-sm py-2">
-                                  <span className="flex items-center">
-                                    <XCircle className="h-4 w-4 mr-2 text-gray-500" />
-                                    {eligibilityResult.sourcesList.filter(s => s.category === 'unreliable').length} Unreliable Sources
-                                  </span>
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                  <ul className="text-sm space-y-1">
-                                    {eligibilityResult.sourcesList.filter(s => s.category === 'unreliable').map((source, idx) => (
-                                      <li key={idx} className="flex items-start">
-                                        <span className="text-gray-400 mr-1">•</span>
-                                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                                          {source.domain}
-                                        </a>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </AccordionContent>
-                              </AccordionItem>
-                            )}
-                            
-                            {/* Deprecated */}
-                            {eligibilityResult.sourcesList.filter(s => s.category === 'deprecated').length > 0 && (
-                              <AccordionItem value="deprecated" className="border-b">
-                                <AccordionTrigger className="text-sm py-2">
-                                  <span className="flex items-center">
-                                    <XCircle className="h-4 w-4 mr-2 text-gray-500" />
-                                    {eligibilityResult.sourcesList.filter(s => s.category === 'deprecated').length} Deprecated Sources
-                                  </span>
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                  <ul className="text-sm space-y-1">
-                                    {eligibilityResult.sourcesList.filter(s => s.category === 'deprecated').map((source, idx) => (
-                                      <li key={idx} className="flex items-start">
-                                        <span className="text-gray-400 mr-1">•</span>
-                                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                                          {source.domain}
-                                        </a>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </AccordionContent>
-                              </AccordionItem>
-                            )}
-                            
-                            {/* No Consensus/Unknown */}
-                            {eligibilityResult.sourcesList.filter(s => !['highlyReliable', 'moderatelyReliable', 'unreliable', 'deprecated'].includes(s.category)).length > 0 && (
-                              <AccordionItem value="noConsensus" className="border-b">
-                                <AccordionTrigger className="text-sm py-2">
-                                  <span className="flex items-center">
-                                    <HelpCircle className="h-4 w-4 mr-2 text-gray-500" />
-                                    {eligibilityResult.sourcesList.filter(s => !['highlyReliable', 'moderatelyReliable', 'unreliable', 'deprecated'].includes(s.category)).length} Sources Without Consensus/Unknown
-                                  </span>
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                  <ul className="text-sm space-y-1">
-                                    {eligibilityResult.sourcesList.filter(s => !['highlyReliable', 'moderatelyReliable', 'unreliable', 'deprecated'].includes(s.category)).map((source, idx) => (
-                                      <li key={idx} className="flex items-start">
-                                        <span className="text-gray-400 mr-1">•</span>
-                                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                                          {source.domain}
-                                        </a>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </AccordionContent>
-                              </AccordionItem>
-                            )}
-                          </Accordion>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                {eligibilityResult && (
+                  <SourcesTab 
+                    categorizedSources={eligibilityResult.categorizedSources} 
+                    sourcesList={eligibilityResult.sourcesList} 
+                  />
+                )}
               </TabsContent>
               
               {/* Wikipedia Draft Tab */}

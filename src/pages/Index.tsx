@@ -7,7 +7,7 @@ const Index = () => {
       {/* Reduced vertical padding and added flexbox centering */}
       <div className="py-8 text-center bg-white mb-4 max-w-3xl">
         <h1 className="text-4xl font-light tracking-tight text-gray-800 font-sans mb-2">
-          Wikipedia Eligibility Analyser
+          WikiApproved - Wikipedia Eligibility Analyser
         </h1>
         <p className="max-w-2xl mx-auto text-lg text-gray-500 font-sans leading-relaxed">
           Analyse your online presence and determine Wikipedia eligibility based on source reliability, notability and credibility.

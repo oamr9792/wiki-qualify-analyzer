@@ -25,8 +25,13 @@ export interface WikipediaEligibilityResult {
     unreliable: number;
     deprecated: number;
   };
-  // Add a list of all analyzed sources
   sourcesList: AnalyzedSource[];
+  categorizedSources?: {
+    highlyReliable: AnalyzedSource[];
+    reliableNoMention: AnalyzedSource[];
+    contextualMention: AnalyzedSource[];
+    unreliable: AnalyzedSource[];
+  };
 }
 
 export function assessWikipediaEligibility(
@@ -56,8 +61,13 @@ export function assessWikipediaEligibility(
     };
   }
   
-  let score = 0;
+  // Move this definition to the BEGINNING of the assessWikipediaEligibility function
+  // (after initial Wikipedia check)
+  let displayScore = 0;
+  let eligible = false;
   const reasons: string[] = [];
+
+  // Declare eligible here, before it's used
   let hasExistingWikipedia = false;
   let existingWikipediaUrl = '';
   let suggestedAction = '';
@@ -87,14 +97,23 @@ export function assessWikipediaEligibility(
       
       let category: 'highlyReliable' | 'moderatelyReliable' | 'unreliable' | 'unknown' | 'deprecated';
       let relevanceMultiplier = 1.0; // Default full weight
+      let relevance: 'high' | 'low' = 'high'; // Default to high
       
       // Check if keyword is in title or URL (case insensitive)
       const hasKeywordInTitle = result.title.toLowerCase().includes(query.toLowerCase());
       const hasKeywordInUrl = result.url.toLowerCase().includes(query.toLowerCase());
       
-      // Reduce weight for results that don't contain the keyword in title or URL
+      // When analyzing sources, be more strict about what counts as "high" relevance
       if (!hasKeywordInTitle && !hasKeywordInUrl) {
         relevanceMultiplier = 0.5; // 50% weight for less relevant results
+        relevance = 'low';
+      } else {
+        // Check if the FULL keyword is present, not just parts of it
+        const fullKeywordInTitle = result.title.toLowerCase().includes(query.toLowerCase());
+        const fullKeywordInUrl = result.url.toLowerCase().includes(query.toLowerCase().replace(/\s+/g, '-')) || 
+                                result.url.toLowerCase().includes(query.toLowerCase().replace(/\s+/g, '_'));
+        
+        relevance = (fullKeywordInTitle || fullKeywordInUrl) ? 'high' : 'low';
       }
       
       // Only mark as deprecated if it's explicitly in the predefined list as deprecated
@@ -117,7 +136,7 @@ export function assessWikipediaEligibility(
         reliability: reliability.reliability,
         category,
         citationCount: reliability.citationCount,
-        relevance: relevanceMultiplier === 1.0 ? 'high' : 'low'
+        relevance
       });
       
     } catch (e) {
@@ -125,56 +144,86 @@ export function assessWikipediaEligibility(
     }
   });
   
-  // Update the scoring weights to give more value to highly reliable sources
-  score += reliableSources.highlyReliable * 15; // Increase from 10 to 15
-  score += reliableSources.moderatelyReliable * 5; // Keep at 5
-  score += reliableSources.unreliable * 1; // Reduce from 2 to 1
-  
-  // Add a bonus for having multiple highly reliable sources
-  if (reliableSources.highlyReliable >= 3) {
-    score += 15; // Bonus for having 3+ highly reliable sources
-    reasons.push("Has multiple high-quality sources covering the topic");
-  } else if (reliableSources.highlyReliable >= 1) {
-    score += 5; // Smaller bonus for having at least 1 highly reliable source
-  }
-  
-  // Add a bonus for diversity of sources
-  const totalUniqueSourceDomains = new Set(sourcesList.map(s => s.domain)).size;
-  if (totalUniqueSourceDomains >= 3) {
-    score += 10;
-    reasons.push("Topic is covered by multiple independent sources");
-  }
-  
-  // Only add significant points for news results if they're from highly reliable sources
-  const reliableNews = newsResults.filter(result => {
-    try {
-      const reliability = getSourceReliability(result.url);
-      return reliability.reliability === "Generally reliable";
-    } catch (e) {
-      return false;
-    }
+  // Improved source categorization with strict keyword matching
+  const categorizedSources = categorizeSources(sourcesList, query, organicResults, newsResults);
+
+  // Count truly reliable sources - only those that mention the full keyword
+  const highlyReliableCount = categorizedSources.highlyReliable.length;
+
+  // Log the detailed source analysis
+  console.log("DETAILED SOURCE ANALYSIS:", {
+    query,
+    highlyReliable: categorizedSources.highlyReliable.map(s => s.domain),
+    reliableNoMention: categorizedSources.reliableNoMention.map(s => s.domain),
+    contextualMention: categorizedSources.contextualMention.map(s => s.domain),
+    highlyReliableCount,
   });
-  
-  if (reliableNews.length >= 3) {
-    score += 10;
-    reasons.push(`Found significant coverage in ${reliableNews.length} reliable news sources`);
+
+  // Apply STRICT scoring based on the highly reliable sources count
+  if (highlyReliableCount === 0) {
+    // No highly reliable sources = exactly 15
+    displayScore = 15;
+    eligible = false;
+    reasons.push("No reliable sources found that specifically mention this topic. Wikipedia requires specific coverage.");
+  } 
+  else if (highlyReliableCount === 1) {
+    // 1 highly reliable source = 25-35
+    displayScore = Math.floor(25 + (Math.random() * 11));
+    eligible = false;
+    reasons.push("Found one reliable source specifically mentioning this topic. Wikipedia typically requires at least 3.");
+  } 
+  else if (highlyReliableCount === 2) {
+    // 2 highly reliable sources = 40-55
+    displayScore = Math.floor(40 + (Math.random() * 16));
+    eligible = false;
+    reasons.push("Found two reliable sources specifically mentioning this topic. Wikipedia typically requires at least 3.");
+  } 
+  else if (highlyReliableCount === 3) {
+    // 3 highly reliable sources = 60-70
+    displayScore = Math.floor(60 + (Math.random() * 11));
+    eligible = false;
+    reasons.push("Found three reliable sources specifically mentioning this topic. This approaches Wikipedia's notability threshold.");
+  } 
+  else if (highlyReliableCount === 4) {
+    // 4 highly reliable sources = 70-80
+    displayScore = Math.floor(70 + (Math.random() * 11));
+    eligible = true;
+    reasons.push("Found four reliable sources specifically mentioning this topic. This meets Wikipedia's notability requirements.");
   }
-  
-  // Penalize for unreliable sources
-  if (reliableSources.unreliable > 0) {
-    reasons.push(`Found ${reliableSources.unreliable} sources considered unreliable by Wikipedia`);
-    if (reliableSources.unreliable > 3) {
-      score -= 15;
-    } else {
-      score -= 5;
-    }
+  else {
+    // 5+ highly reliable sources = 80-100
+    displayScore = Math.floor(80 + (Math.random() * 21));
+    eligible = true;
+    reasons.push(`Found ${highlyReliableCount} reliable sources specifically mentioning this topic. This exceeds Wikipedia's notability requirements.`);
   }
-  
-  if (reliableSources.deprecated > 0) {
-    reasons.push(`Found ${reliableSources.deprecated} deprecated sources that should not be used on Wikipedia`);
-    score -= 20;
+
+  // Set the suggested action based on the reliable source count
+  if (hasExistingWikipedia) {
+    suggestedAction = "View or improve the existing Wikipedia article";
+  } else if (eligible) {
+    suggestedAction = "Consider creating a Wikipedia article with these reliable sources";
+  } else if (highlyReliableCount >= 3) {
+    suggestedAction = "Approaching eligibility, but needs more high-quality reliable sources";
+  } else if (highlyReliableCount > 0) {
+    suggestedAction = "Not currently eligible. Needs more reliable sources that specifically discuss this topic.";
+  } else {
+    suggestedAction = "Not eligible. Wikipedia requires coverage in reliable, independent sources.";
   }
-  
+
+  // Add clear debugging to help diagnose issues
+  console.log("SOURCE ANALYSIS FINAL:", {
+    query,
+    highlyReliableCount,
+    score: displayScore,
+    eligible,
+    reasons,
+    sourcesWithRelevance: sourcesList.map(s => ({
+      domain: s.domain,
+      category: s.category,
+      relevance: s.relevance
+    }))
+  });
+
   // De-duplicate sources list by domain to avoid redundant entries
   const uniqueSources = Array.from(new Map(sourcesList.map(source => 
     [source.domain, source]
@@ -192,99 +241,53 @@ export function assessWikipediaEligibility(
     return reliabilityOrder[a.category] - reliabilityOrder[b.category];
   });
   
-  // Calculate the raw score
-  let rawScore = Math.min(100, Math.max(0, score));
-  
-  // Apply a more natural variation to scores while keeping them encouraging
-  let displayScore;
-  
-  // Base calculation from raw score for consistency
-  let baseScore;
-  if (rawScore < 25) {
-    // For very low scores, give a significant boost
-    baseScore = 30 + (rawScore * 1.5);
-  } else if (rawScore < 50) {
-    // For medium-low scores, boost them into the 60-80 range
-    baseScore = 55 + (rawScore - 25) * 1.0;
-  } else if (rawScore < 70) {
-    // For medium-high scores, boost them into the 80-90 range
-    baseScore = 80 + (rawScore - 50) * 0.5;
-  } else {
-    // For high scores, boost them closer to 100
-    baseScore = 90 + (rawScore - 70) * 0.33;
-  }
+  // Define reliableSourcesCount for debug logging
+  const reliableSourcesCount = sourcesList.filter(s => 
+    s.category === 'highlyReliable' || s.category === 'moderatelyReliable'
+  ).length;
 
-  // Add realistic variation factors
-  const reliabilityFactor = Math.min(10, Math.max(-10, 
-    // Bonus for highly reliable sources
-    (reliableSources.highlyReliable * 1.5) +
-    // Smaller bonus for moderately reliable sources
-    (reliableSources.moderatelyReliable * 0.7) -
-    // Penalty for unreliable sources
-    (reliableSources.unreliable * 0.3) -
-    // Larger penalty for deprecated sources
-    (reliableSources.deprecated * 0.8)
-  ));
+  // Now the debug logging will work correctly
+  console.log("Source analysis details:", {
+    query,
+    sourcesList,
+    highlyReliableCount,
+    reliableSourcesText: reliableSourcesCount,
+    highlyReliableCount: reliableSources.highlyReliable,
+    moderatelyReliableCount: reliableSources.moderatelyReliable
+  });
 
-  // Media coverage factor - news results provide a bonus
-  const newsBonus = Math.min(5, newsResults.length * 0.8);
+  // Add this right before returning from assessWikipediaEligibility
+  console.log("CATEGORIZED SOURCES BEFORE RETURN:", {
+    highlyReliable: categorizedSources.highlyReliable.length,
+    highlyReliableDomains: categorizedSources.highlyReliable.map(s => s.domain),
+    reliableNoMention: categorizedSources.reliableNoMention.length,
+    reliableNoMentionDomains: categorizedSources.reliableNoMention.map(s => s.domain),
+    unreliable: categorizedSources.unreliable.length,
+    unreliableDomains: categorizedSources.unreliable.map(s => s.domain),
+    contextualMention: categorizedSources.contextualMention.length,
+    contextualMentionDomains: categorizedSources.contextualMention?.map(s => s.domain) || []
+  });
 
-  // Variation by topic type (using a hash function of the query for consistent but seemingly random variation)
-  const queryHash = query.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 10;
-  const topicVariation = (queryHash - 5) * 0.6; // Range of -3 to +3 roughly
+  // Add this toward the end of the assessWikipediaEligibility function
+  console.log("ANALYSIS COMPARISON:", {
+    query: query,
+    mainAnalysisCount: highlyReliableCount,
+    uiSourcesHighlyReliable: categorizedSources.highlyReliable.length,
+    uiSourcesReliableNoMention: categorizedSources.reliableNoMention.length,
+    uiSourcesUnreliable: categorizedSources.unreliable.length,
+    summaryMessage: reasons[0]
+  });
 
-  // Calculate final display score with variations
-  displayScore = Math.min(100, Math.max(20,
-    baseScore + reliabilityFactor + newsBonus + topicVariation
-  ));
-
-  // Add a small "believable" decimal component sometimes
-  if (queryHash % 2 === 0) {
-    displayScore = Math.floor(displayScore * 10) / 10;
-  } else {
-    displayScore = Math.round(displayScore);
-  }
-  
-  // Then update the eligibility determination
-  let eligible = false;
-  if (displayScore >= 70) {
-    eligible = true;
-    reasons.push("Score is high enough to indicate eligibility");
-  } else if (displayScore >= 55) { // Lower this threshold
-    reasons.push("Score is almost high enough for eligibility");
-  }
-  
-  // Determine suggested action
-  if (hasExistingWikipedia) {
-    suggestedAction = "View or improve the existing Wikipedia article";
-  } else if (eligible) {
-    suggestedAction = "Consider creating a Wikipedia article with these reliable sources";
-  } else if (displayScore > 40) {
-    suggestedAction = "Potentially eligible, but needs more reliable sources";
-  } else {
-    suggestedAction = "Topic likely does not meet Wikipedia's notability guidelines";
-  }
-  
-  // Count reliable sources
-  const totalReliableSources = 
-    reliableSources.highlyReliable + reliableSources.moderatelyReliable;
-  
-  // Cap score at 15 if there are zero reliable sources
-  if (totalReliableSources === 0 && score > 15) {
-    score = 15;
-    reasons.push("Insufficient reliable sources found. Topics need coverage in reliable sources to establish notability.");
-    eligible = false;
-  }
-  
   return {
     eligible,
-    score: displayScore, // Return the more generous display score
+    score: displayScore,
     hasExistingWikipedia,
     existingWikipediaUrl,
     reasons,
     suggestedAction,
     reliableSources,
-    sourcesList: uniqueSources
+    sourcesList: uniqueSources,
+    categorizedSources
   };
 }
 
@@ -380,4 +383,98 @@ export const checkForExistingWikipedia = (
     exists: !!wikipediaResult,
     url: wikipediaResult ? wikipediaResult.url : null
   };
+};
+
+// Update the categorization function to work properly
+// Replace the existing categorizeSources function with this:
+
+const categorizeSources = (sourcesList: AnalyzedSource[], query: string, organicResults: SearchResult[], newsResults: SearchResult[]) => {
+  // Categories for sources
+  const categorizedSources = {
+    highlyReliable: [] as AnalyzedSource[],     // Domain reliable + full keyword in title/URL/meta
+    reliableNoMention: [] as AnalyzedSource[],  // Domain reliable but doesn't mention full keyword
+    contextualMention: [] as AnalyzedSource[],  // Keyword in content only, not in title/URL/meta 
+    unreliable: [] as AnalyzedSource[]          // Not reliable/deprecated
+  };
+  
+  // Track URLs we've already processed to avoid duplicates
+  const processedUrls = new Set<string>();
+  
+  // Exact FULL query match required
+  const normalizedQuery = query.toLowerCase().trim();
+  
+  // Process each source
+  sourcesList.forEach(source => {
+    // Skip if we've already processed this URL
+    if (processedUrls.has(source.url)) {
+      console.log(`  → Skipping duplicate URL: ${source.url}`);
+      return;
+    }
+    
+    // Add to processed URLs set
+    processedUrls.add(source.url);
+    
+    console.log(`Processing source: ${source.domain} (${source.category})`);
+    // First check if domain is reliable
+    const isReliableDomain = source.category === 'highlyReliable' || source.category === 'moderatelyReliable';
+    
+    if (!isReliableDomain) {
+      console.log(`  → Unreliable domain: ${source.domain}`);
+      categorizedSources.unreliable.push(source);
+      return;
+    }
+    
+    // Get the matching search result to check title/URL/description
+    const matchingResult = [...organicResults, ...newsResults].find(r => r.url === source.url);
+    
+    if (!matchingResult) {
+      console.log(`  → No matching result found for: ${source.url}`);
+      categorizedSources.reliableNoMention.push(source);
+      return;
+    }
+    
+    // Check for FULL keyword match in title, URL, or meta description
+    const hasFullKeywordInTitle = matchingResult.title.toLowerCase().includes(normalizedQuery);
+    const hasFullKeywordInUrl = matchingResult.url.toLowerCase().includes(normalizedQuery) ||
+                              matchingResult.url.toLowerCase().includes(normalizedQuery.replace(/\s+/g, '-')) ||
+                              matchingResult.url.toLowerCase().includes(normalizedQuery.replace(/\s+/g, '_'));
+    const hasFullKeywordInMeta = matchingResult.description?.toLowerCase().includes(normalizedQuery) || false;
+    
+    if (hasFullKeywordInTitle || hasFullKeywordInUrl || hasFullKeywordInMeta) {
+      // This is a true highly reliable source - domain is reliable and explicitly mentions the topic
+      console.log(`  → Highly reliable with specific mention: ${source.domain}`);
+      categorizedSources.highlyReliable.push(source);
+    } else {
+      // For now, we assume it's a "no mention" source, but in reality we should:
+      // 1. Check for contextual mentions in full content (not just metadata)
+      
+      // THIS IS A PLACEHOLDER - in a real implementation, we would need to fetch the 
+      // full content to determine if it has contextual mentions
+      
+      // For testing, let's classify some as contextual mention if they contain parts of the query
+      const queryParts = normalizedQuery.split(' ');
+      const hasPartialKeyword = queryParts.some(part => 
+        part.length > 3 && // Ignore short words
+        (matchingResult.title.toLowerCase().includes(part) || 
+         matchingResult.description?.toLowerCase().includes(part))
+      );
+      
+      if (hasPartialKeyword) {
+        console.log(`  → Contextual mention: ${source.domain}`);
+        categorizedSources.contextualMention.push(source);
+      } else {
+        console.log(`  → Reliable domain but no mention: ${source.domain}`);
+        categorizedSources.reliableNoMention.push(source);
+      }
+    }
+  });
+  
+  console.log("FINAL CATEGORIZATION:", {
+    highlyReliable: categorizedSources.highlyReliable.length,
+    reliableNoMention: categorizedSources.reliableNoMention.length,
+    contextualMention: categorizedSources.contextualMention.length,
+    unreliable: categorizedSources.unreliable.length
+  });
+  
+  return categorizedSources;
 }; 

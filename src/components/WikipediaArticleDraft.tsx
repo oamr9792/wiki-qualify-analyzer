@@ -377,7 +377,7 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
     <div className="mt-4">
       {/* For existing Wikipedia articles */}
       {hasExistingWikipedia && (
-        <Alert variant="info" className="mb-4">
+        <Alert variant="warning" className="mb-4">
           <InfoIcon className="h-4 w-4" />
           <AlertDescription>
             This topic already has a Wikipedia article. A draft is not needed.
@@ -490,7 +490,7 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
           
           <div className="mb-6">
             {hasExistingWikipedia ? (
-              <Alert variant="info" className="mb-4">
+              <Alert variant="warning" className="mb-4">
                 <InfoIcon className="h-4 w-4" />
                 <AlertDescription>
                   This topic already has a Wikipedia article. A draft is not needed.
@@ -507,6 +507,24 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
                 </AlertDescription>
               </Alert>
             ) : eligible ? (
+              <>
+                <h2 className="text-lg font-medium mb-2">You Could be Eligible for a Wikipedia Page</h2>
+                <p className="text-sm text-gray-600 mb-3">
+                  Your topic appears to meet the credibility and sourcing requirements Wikipedia editors look for. 
+                  That's a strong position to be in—congrats.
+                </p>
+                <p className="text-sm text-gray-700 mb-4">
+                  <strong>Contact us for a consultation</strong> to go over next steps. We'll help you fine-tune your narrative, 
+                  identify the best sources to cite, and ensure you approach the process the right way—from draft to approval.
+                </p>
+                <Button 
+                  onClick={() => window.open('mailto:info@wikipublisher.com')}
+                  className="mb-6 bg-blue-900 hover:bg-blue-800 text-white font-medium"
+                >
+                  Contact us for a consultation
+                </Button>
+              </>
+            ) : score >= 65 ? (
               <>
                 <h2 className="text-lg font-medium mb-2">You Could be Eligible for a Wikipedia Page</h2>
                 <p className="text-sm text-gray-600 mb-3">

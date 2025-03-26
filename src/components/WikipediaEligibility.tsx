@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CalendlyEmbed } from '@/components/CalendlyEmbed';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { SourcesTab } from '@/components/SourcesTab';
 
 interface WikipediaEligibilityProps {
   result: WikipediaEligibilityResult;
@@ -33,9 +33,36 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
     );
   }
 
-  const { eligible, score, hasExistingWikipedia, existingWikipediaUrl, reasons, suggestedAction, reliableSources, sourcesList } = result;
+  const { eligible, score, hasExistingWikipedia, existingWikipediaUrl, reasons, suggestedAction, reliableSources, sourcesList, categorizedSources } = result;
   const [showSources, setShowSources] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
+  
+  // Define openCalendlyPopup BEFORE it's used
+  const openCalendlyPopup = () => {
+    // Direct URL approach as backup
+    const calendlyUrl = 'https://calendly.com/orani/30min';
+    
+    // Try using the Calendly API if available
+    if (typeof window !== 'undefined') {
+      if (window.Calendly && typeof window.Calendly.initPopupWidget === 'function') {
+        window.Calendly.initPopupWidget({
+          url: calendlyUrl
+        });
+      } else {
+        // Direct popup if Calendly API is not available
+        const width = 1000;
+        const height = 750;
+        const left = (window.innerWidth - width) / 2;
+        const top = (window.innerHeight - height) / 2;
+        
+        window.open(
+          calendlyUrl,
+          'Calendly',
+          `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`
+        );
+      }
+    }
+  };
   
   // Helper function to check if domain is in predefined list
   const isInPredefinedList = (domain: string) => {
@@ -149,169 +176,159 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
     );
   }
   
-  // Update the openCalendlyPopup function to ensure it works reliably
-  const openCalendlyPopup = () => {
-    // Direct URL approach as backup
-    const calendlyUrl = 'https://calendly.com/orani/30min';
-    
-    // Try using the Calendly API if available
-    if (typeof window !== 'undefined') {
-      if (window.Calendly && typeof window.Calendly.initPopupWidget === 'function') {
-        window.Calendly.initPopupWidget({
-          url: calendlyUrl
-        });
-      } else {
-        // Direct popup if Calendly API is not available
-        const width = 1000;
-        const height = 750;
-        const left = (window.innerWidth - width) / 2;
-        const top = (window.innerHeight - height) / 2;
-        
-        window.open(
-          calendlyUrl,
-          'Calendly',
-          `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`
-        );
-      }
-    }
-  };
-  
   return (
-    <div className="space-y-3">
-      {/* Status and Score */}
-      <div className="flex items-center justify-between border-b pb-2 mb-2">
-        <div className="flex items-center">
-          {result.eligible ? (
-            <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-          ) : result.score > 40 ? (
-            <AlertTriangle className="h-5 w-5 text-amber-500 mr-2" />
-          ) : (
-            <XCircle className="h-5 w-5 text-gray-500 mr-2" />
-          )}
-          <div>
-            <h3 className="font-medium">
-              {result.eligible ? "Eligible" : result.score > 40 ? "Potentially Eligible" : "Not Eligible"}
-            </h3>
-            <p className="text-xs text-gray-600">
-              {result.suggestedAction}
-            </p>
+    <div>
+      <div className="space-y-3">
+        {/* Status, Analysis and Score on one line */}
+        <div className="flex items-center justify-between border-b pb-2 mb-4">
+          {/* Left: Status - With color coding */}
+          <div className="flex items-center mr-2 min-w-[120px]">
+            {/* Icon already has appropriate colors */}
+            {result.eligible ? (
+              <CheckCircle className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
+            ) : result.score > 40 ? (
+              <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 flex-shrink-0" />
+            ) : (
+              <XCircle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
+            )}
+            <div>
+              <h3 className={`font-medium whitespace-nowrap ${
+                result.eligible 
+                  ? "text-green-600" 
+                  : result.score > 40 
+                    ? "text-amber-500" 
+                    : "text-red-500"
+              }`}>
+                {result.eligible ? "Eligible" : result.score > 40 ? "Potentially Eligible" : "Not Eligible"}
+              </h3>
+            </div>
           </div>
-        </div>
-        <div className="text-right flex items-center">
-          <div>
+          
+          {/* Middle: Analysis summary with more detailed explanation */}
+          <div className="text-sm text-gray-700 flex-grow px-2">
+            <span className={`font-medium ${result.eligible ? "text-green-600" : result.score > 40 ? "text-amber-600" : "text-gray-600"}`}>
+              {result.eligible ? "Strong potential. " : 
+               result.score > 65 ? "Good potential. " : 
+               result.score > 40 ? "Shows potential. " : 
+               "Limited coverage. "}
+            </span>
+            <span className="text-gray-600">
+              {result.score === 15 ? (
+                "No reliable sources found that specifically mention this topic. Wikipedia requires specific coverage."
+              ) : result.score >= 80 ? (
+                `Found ${result.sourcesList.filter(s => 
+                  (s.category === 'highlyReliable' || s.category === 'moderatelyReliable') && 
+                  s.relevance === 'high'
+                ).length} reliable sources specifically mentioning this topic. This exceeds Wikipedia's notability requirements.`
+              ) : result.score >= 70 ? (
+                "Found four reliable sources specifically mentioning this topic. This meets Wikipedia's notability requirements."
+              ) : result.score >= 60 ? (
+                "Found three reliable sources specifically mentioning this topic. This approaches Wikipedia's notability threshold."
+              ) : result.score >= 40 ? (
+                "Found two reliable sources specifically mentioning this topic. Wikipedia typically requires at least 3."
+              ) : (
+                "Found one reliable source specifically mentioning this topic. Wikipedia typically requires at least 3."
+              )}
+            </span>
+          </div>
+          
+          {/* Right: Score */}
+          <div className="flex flex-col items-center justify-center min-w-[60px] ml-2">
             <div className="text-xs text-gray-600">Score</div>
             <div className="font-bold text-xl">{Math.round(result.score)}</div>
           </div>
         </div>
-      </div>
-      
-      {/* Score explanation - NEW */}
-      <div className="mt-4 mb-2 text-sm border-t border-b py-3">
-        <h4 className="font-medium mb-1">Analysis Summary</h4>
-        <p className="text-gray-700">
-          {result.eligible ? (
-            <>
-              <span className="text-green-600 font-medium">Strong Wikipedia potential. </span>
-              Found {groupedSources.highlyReliable.length} reliable and {groupedSources.moderatelyReliable.length} moderately 
-              reliable sources, providing sufficient third-party coverage to establish notability.
-            </>
-          ) : result.score > 65 ? (
-            <>
-              <span className="text-amber-600 font-medium">Good potential but needs refinement. </span>
-              Found {groupedSources.highlyReliable.length} reliable sources, which is promising, but Wikipedia editors typically 
-              look for additional high-quality, independent coverage to establish clear notability.
-            </>
-          ) : result.score > 40 ? (
-            <>
-              <span className="text-amber-600 font-medium">Shows potential but needs more coverage. </span>
-              Your topic has some third-party coverage with {reliableSourcesCount} reliable or moderate sources, 
-              but would benefit from additional high-quality sources from established publications.
-            </>
-          ) : (
-            <>
-              <span className="text-gray-600 font-medium">Currently limited coverage. </span>
-              Found {reliableSourcesCount} reliable or moderate sources discussing this topic, 
-              which is below the typical threshold for Wikipedia notability. Focus on gaining more 
-              coverage from established publications.
-            </>
-          )}
-        </p>
-      </div>
-      
-      {/* Call to action when not eligible */}
-      {!result.eligible && !result.hasExistingWikipedia && (
-        <div className="mt-6 border rounded-md p-4 bg-gray-50">
-          {/* Display the heading and text directly instead of in a dialog */}
-          <div className="mb-4">
-            <h2 className="text-xl font-medium mb-3">
-              {result.score >= 65 ? (
-                <>You Could be Eligible for a Wikipedia Page</>
-              ) : result.score >= 45 ? (
-                <>You're Close — But Not Quite There</>
+        
+        {/* Call to action when not eligible */}
+        {!result.eligible && !result.hasExistingWikipedia && (
+          <div className="mt-6 border rounded-md p-4 bg-gray-50">
+            {/* Display the heading and text directly instead of in a dialog */}
+            <div className="mb-4">
+              <h2 className="text-xl font-medium mb-3">
+                {result.score >= 65 ? (
+                  <>You Could be Eligible for a Wikipedia Page</>
+                ) : result.score >= 45 ? (
+                  <>You're Close — But Not Quite There</>
+                ) : (
+                  <>You're Not Ready (Yet)</>
+                )}
+              </h2>
+              
+              {result.score < 45 ? (
+                <div className="space-y-3 text-sm text-gray-600 text-left">
+                  <p>
+                    Wikipedia only allows pages about topics that meet its strict standards for notability and credibility. 
+                    Right now, the available sources and public footprint around your name or brand aren't quite strong enough.
+                  </p>
+                  <p>
+                    But here's the good news: you can build that credibility. With the right strategy—media coverage, 
+                    high-authority citations, and a strong digital footprint—you can get there.
+                  </p>
+                  <p className="font-medium">
+                    Book a free call to discuss how we can boost your online presence, credibility, 
+                    and reputation—so you're ready for Wikipedia when it counts.
+                  </p>
+                </div>
+              ) : result.score < 65 ? (
+                <div className="space-y-3 text-sm text-gray-600 text-left">
+                  <p>
+                    You're on the right track. Your subject shows some signs of notability, but it needs a stronger 
+                    foundation to meet Wikipedia's standards. A few more high-quality media mentions or third-party 
+                    sources could make all the difference.
+                  </p>
+                  <p className="font-medium">
+                    Book a free consultation and we'll show you how to build up your credibility, 
+                    fill in the missing gaps, and get closer to Wikipedia eligibility without wasting time or money.
+                  </p>
+                </div>
               ) : (
-                <>You're Not Ready (Yet)</>
+                <div className="space-y-3 text-sm text-gray-600 text-left">
+                  <p>
+                    Your topic appears to meet the credibility and sourcing requirements Wikipedia editors look for. 
+                    That's a strong position to be in—congrats.
+                  </p>
+                  <p className="font-medium">
+                    Book a quick call to go over next steps. We'll help you fine-tune your narrative, 
+                    identify the best sources to cite, and ensure you approach the process the right way—from draft to approval.
+                  </p>
+                </div>
               )}
-            </h2>
-            
-            {result.score < 45 ? (
-              <div className="space-y-3 text-sm text-gray-600">
-                <p>
-                  Wikipedia only allows pages about topics that meet its strict standards for notability and credibility. 
-                  Right now, the available sources and public footprint around your name or brand aren't quite strong enough.
-                </p>
-                <p>
-                  But here's the good news: you can build that credibility. With the right strategy—media coverage, 
-                  high-authority citations, and a strong digital footprint—you can get there.
-                </p>
-                <p className="font-medium">
-                  Book a free call to discuss how we can boost your online presence, credibility, 
-                  and reputation—so you're ready for Wikipedia when it counts.
-                </p>
-              </div>
-            ) : result.score < 65 ? (
-              <div className="space-y-3 text-sm text-gray-600">
-                <p>
-                  You're on the right track. Your subject shows some signs of notability, but it needs a stronger 
-                  foundation to meet Wikipedia's standards. A few more high-quality media mentions or third-party 
-                  sources could make all the difference.
-                </p>
-                <p className="font-medium">
-                  Book a free consultation and we'll show you how to build up your credibility, 
-                  fill in the missing gaps, and get closer to Wikipedia eligibility without wasting time or money.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3 text-sm text-gray-600">
-                <p>
-                  Your topic appears to meet the credibility and sourcing requirements Wikipedia editors look for. 
-                  That's a strong position to be in—congrats.
-                </p>
-                <p className="font-medium">
-                  Book a quick call to go over next steps. We'll help you fine-tune your narrative, 
-                  identify the best sources to cite, and ensure you approach the process the right way—from draft to approval.
-                </p>
-              </div>
-            )}
-          </div>
+            </div>
 
-          {/* Add the button to open Calendly popup */}
-          <div className="mt-4">
-            <Button 
-              onClick={openCalendlyPopup}
-              className="w-full bg-[#17163e] hover:bg-[#232253] text-white"
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              {result.score >= 65 ? (
-                <>Schedule a Free Consultation</>
-              ) : result.score >= 45 ? (
-                <>Book a Free Consultation</>
-              ) : (
-                <>Book a Free Call</>
-              )}
-            </Button>
+            {/* Add the button to open Calendly popup */}
+            <div className="mt-4">
+              <Button 
+                onClick={openCalendlyPopup}
+                className="w-full bg-[#17163e] hover:bg-[#232253] text-white"
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                {result.score >= 65 ? (
+                  <>Schedule a Free Consultation</>
+                ) : result.score >= 45 ? (
+                  <>Book a Free Consultation</>
+                ) : (
+                  <>Book a Free Call</>
+                )}
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Add these two components to export the tab contents separately
+export function SourcesAnalysisTab({ result }: { result: WikipediaEligibilityResult }) {
+  if (!result?.categorizedSources) return null;
+  return <SourcesTab categorizedSources={result.categorizedSources} sourcesList={result.sourcesList} />;
+}
+
+export function WikipediaDraftTab({ /* props */ }) {
+  return (
+    <div>
+      {/* Your Wikipedia draft content */}
+      <p>Draft content here...</p>
     </div>
   );
 } 
