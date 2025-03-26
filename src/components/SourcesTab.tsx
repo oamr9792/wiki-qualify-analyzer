@@ -20,6 +20,7 @@ export function SourcesTab({ categorizedSources, sourcesList }: SourcesTabProps)
     highlyReliable: categorizedSources?.highlyReliable?.length || 0,
     reliableNoMention: categorizedSources?.reliableNoMention?.length || 0,
     contextualMention: categorizedSources?.contextualMention?.length || 0,
+    contextualMentionData: categorizedSources?.contextualMention || [],
     unreliable: categorizedSources?.unreliable?.length || 0
   });
 
@@ -107,10 +108,10 @@ export function SourcesTab({ categorizedSources, sourcesList }: SourcesTabProps)
             
             {/* Contextual Mentions */}
             {categorizedSources?.contextualMention && categorizedSources.contextualMention.length > 0 && (
-              <AccordionItem value="contextual" className="border-b">
+              <AccordionItem value="contextualMention" className="border-b">
                 <AccordionTrigger className="text-sm py-2">
                   <span className="flex items-center">
-                    <HelpCircle className="h-4 w-4 mr-2 text-amber-500" />
+                    <InfoIcon className="h-4 w-4 mr-2 text-yellow-500" />
                     {categorizedSources.contextualMention.length} Contextual Mentions
                   </span>
                 </AccordionTrigger>

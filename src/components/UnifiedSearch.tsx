@@ -474,7 +474,7 @@ export function UnifiedSearch() {
             
             {/* Add a hint about when to use modifiers */}
             <p className="text-xs text-gray-500 mt-1">
-              Tip: If your search term is a common name or topic, add modifier keywords to make your search more specific.
+              Tip: If your search term is a common name or topic, add modifier keywords to make your search more specific. Check the sources tab in the results to verify accuracy.
             </p>
             
             {userIp && remainingSearches < Infinity && (

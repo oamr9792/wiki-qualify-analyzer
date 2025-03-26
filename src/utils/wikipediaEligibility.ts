@@ -40,6 +40,14 @@ export function assessWikipediaEligibility(
   newsResults: SearchResult[] = [],
   domainCitations: Record<string, number> = {}
 ): WikipediaEligibilityResult {
+  // Add near the beginning of assessWikipediaEligibility function
+  console.log("SEARCH RESULTS:", {
+    organicCount: organicResults.length,
+    newsCount: newsResults.length,
+    organicUrls: organicResults.map(r => r.url),
+    newsUrls: newsResults.length > 0 ? newsResults.map(r => r.url) : []
+  });
+
   // Check for existing Wikipedia page first with the improved function
   const wikipediaCheck = checkForExistingWikipedia(query, [...organicResults, ...newsResults]);
   
@@ -144,11 +152,23 @@ export function assessWikipediaEligibility(
     }
   });
   
+  // And before the categorizedSources call:
+  console.log("SOURCE LIST BEFORE CATEGORIZATION:", sourcesList.map(s => ({ 
+    domain: s.domain, 
+    url: s.url, 
+    category: s.category,
+    relevance: s.relevance 
+  })));
+
   // Improved source categorization with strict keyword matching
   const categorizedSources = categorizeSources(sourcesList, query, organicResults, newsResults);
 
   // Count truly reliable sources - only those that mention the full keyword
   const highlyReliableCount = categorizedSources.highlyReliable.length;
+  // Add contextual mentions at half value (0.5 each)
+  const contextualMentionValue = categorizedSources.contextualMention.length * 0.5;
+  // Combined effective source count (whole number + fractional part)
+  const effectiveSourceCount = highlyReliableCount + contextualMentionValue;
 
   // Log the detailed source analysis
   console.log("DETAILED SOURCE ANALYSIS:", {
@@ -157,44 +177,46 @@ export function assessWikipediaEligibility(
     reliableNoMention: categorizedSources.reliableNoMention.map(s => s.domain),
     contextualMention: categorizedSources.contextualMention.map(s => s.domain),
     highlyReliableCount,
+    contextualMentionValue,
+    effectiveSourceCount
   });
 
-  // Apply STRICT scoring based on the highly reliable sources count
-  if (highlyReliableCount === 0) {
-    // No highly reliable sources = exactly 15
+  // Apply STRICT scoring based on the effective source count
+  if (effectiveSourceCount < 1) {
+    // No reliable sources = exactly 15
     displayScore = 15;
     eligible = false;
     reasons.push("No reliable sources found that specifically mention this topic. Wikipedia requires specific coverage.");
   } 
-  else if (highlyReliableCount === 1) {
-    // 1 highly reliable source = 25-35
+  else if (effectiveSourceCount < 2) {
+    // Less than 2 effective sources (e.g., 1 reliable or 2 contextual) = 25-35
     displayScore = Math.floor(25 + (Math.random() * 11));
     eligible = false;
-    reasons.push("Found one reliable source specifically mentioning this topic. Wikipedia typically requires at least 3.");
+    reasons.push(`Found ${highlyReliableCount} reliable sources and ${categorizedSources.contextualMention.length} contextual mentions of this topic. Wikipedia typically requires at least 3 reliable sources.`);
   } 
-  else if (highlyReliableCount === 2) {
-    // 2 highly reliable sources = 40-55
+  else if (effectiveSourceCount < 3) {
+    // Less than 3 effective sources = 40-55
     displayScore = Math.floor(40 + (Math.random() * 16));
     eligible = false;
-    reasons.push("Found two reliable sources specifically mentioning this topic. Wikipedia typically requires at least 3.");
+    reasons.push(`Found ${highlyReliableCount} reliable sources and ${categorizedSources.contextualMention.length} contextual mentions of this topic. This is approaching Wikipedia's notability requirements.`);
   } 
-  else if (highlyReliableCount === 3) {
-    // 3 highly reliable sources = 60-70
+  else if (effectiveSourceCount < 4) {
+    // Less than 4 effective sources = 60-70
     displayScore = Math.floor(60 + (Math.random() * 11));
     eligible = false;
-    reasons.push("Found three reliable sources specifically mentioning this topic. This approaches Wikipedia's notability threshold.");
+    reasons.push(`Found ${highlyReliableCount} reliable sources and ${categorizedSources.contextualMention.length} contextual mentions of this topic. This approaches Wikipedia's notability threshold.`);
   } 
-  else if (highlyReliableCount === 4) {
-    // 4 highly reliable sources = 70-80
+  else if (effectiveSourceCount < 5) {
+    // Less than 5 effective sources = 70-80
     displayScore = Math.floor(70 + (Math.random() * 11));
     eligible = true;
-    reasons.push("Found four reliable sources specifically mentioning this topic. This meets Wikipedia's notability requirements.");
+    reasons.push(`Found ${highlyReliableCount} reliable sources and ${categorizedSources.contextualMention.length} contextual mentions of this topic. This meets Wikipedia's notability requirements.`);
   }
   else {
-    // 5+ highly reliable sources = 80-100
+    // 5+ effective sources = 80-100
     displayScore = Math.floor(80 + (Math.random() * 21));
     eligible = true;
-    reasons.push(`Found ${highlyReliableCount} reliable sources specifically mentioning this topic. This exceeds Wikipedia's notability requirements.`);
+    reasons.push(`Found ${highlyReliableCount} reliable sources and ${categorizedSources.contextualMention.length} contextual mentions of this topic. This exceeds Wikipedia's notability requirements.`);
   }
 
   // Set the suggested action based on the reliable source count
@@ -202,9 +224,9 @@ export function assessWikipediaEligibility(
     suggestedAction = "View or improve the existing Wikipedia article";
   } else if (eligible) {
     suggestedAction = "Consider creating a Wikipedia article with these reliable sources";
-  } else if (highlyReliableCount >= 3) {
+  } else if (effectiveSourceCount >= 3) {
     suggestedAction = "Approaching eligibility, but needs more high-quality reliable sources";
-  } else if (highlyReliableCount > 0) {
+  } else if (effectiveSourceCount > 0) {
     suggestedAction = "Not currently eligible. Needs more reliable sources that specifically discuss this topic.";
   } else {
     suggestedAction = "Not eligible. Wikipedia requires coverage in reliable, independent sources.";
@@ -213,7 +235,7 @@ export function assessWikipediaEligibility(
   // Add clear debugging to help diagnose issues
   console.log("SOURCE ANALYSIS FINAL:", {
     query,
-    highlyReliableCount,
+    effectiveSourceCount,
     score: displayScore,
     eligible,
     reasons,
@@ -250,7 +272,7 @@ export function assessWikipediaEligibility(
   console.log("Source analysis details:", {
     query,
     sourcesList,
-    highlyReliableCount,
+    effectiveSourceCount,
     reliableSourcesText: reliableSourcesCount,
     highlyReliableCount: reliableSources.highlyReliable,
     moderatelyReliableCount: reliableSources.moderatelyReliable
@@ -271,7 +293,7 @@ export function assessWikipediaEligibility(
   // Add this toward the end of the assessWikipediaEligibility function
   console.log("ANALYSIS COMPARISON:", {
     query: query,
-    mainAnalysisCount: highlyReliableCount,
+    mainAnalysisCount: effectiveSourceCount,
     uiSourcesHighlyReliable: categorizedSources.highlyReliable.length,
     uiSourcesReliableNoMention: categorizedSources.reliableNoMention.length,
     uiSourcesUnreliable: categorizedSources.unreliable.length,
@@ -397,6 +419,20 @@ const categorizeSources = (sourcesList: AnalyzedSource[], query: string, organic
     unreliable: [] as AnalyzedSource[]          // Not reliable/deprecated
   };
   
+  // Add the missing findMatchingResult function
+  const findMatchingResult = (sourceUrl: string, results: SearchResult[]): SearchResult | undefined => {
+    // Normalize URLs for comparison by removing protocol and trailing slashes
+    const normalizeUrl = (url: string) => {
+      return url.replace(/^https?:\/\//, '')
+                .replace(/^www\./, '')
+                .replace(/\/$/, '');
+    };
+    
+    const normalizedSourceUrl = normalizeUrl(sourceUrl);
+    
+    return results.find(r => normalizeUrl(r.url) === normalizedSourceUrl);
+  };
+  
   // Track URLs we've already processed to avoid duplicates
   const processedUrls = new Set<string>();
   
@@ -425,7 +461,7 @@ const categorizeSources = (sourcesList: AnalyzedSource[], query: string, organic
     }
     
     // Get the matching search result to check title/URL/description
-    const matchingResult = [...organicResults, ...newsResults].find(r => r.url === source.url);
+    const matchingResult = findMatchingResult(source.url, [...organicResults, ...newsResults]);
     
     if (!matchingResult) {
       console.log(`  → No matching result found for: ${source.url}`);
@@ -434,33 +470,64 @@ const categorizeSources = (sourcesList: AnalyzedSource[], query: string, organic
     }
     
     // Check for FULL keyword match in title, URL, or meta description
-    const hasFullKeywordInTitle = matchingResult.title.toLowerCase().includes(normalizedQuery);
-    const hasFullKeywordInUrl = matchingResult.url.toLowerCase().includes(normalizedQuery) ||
-                              matchingResult.url.toLowerCase().includes(normalizedQuery.replace(/\s+/g, '-')) ||
-                              matchingResult.url.toLowerCase().includes(normalizedQuery.replace(/\s+/g, '_'));
-    const hasFullKeywordInMeta = matchingResult.description?.toLowerCase().includes(normalizedQuery) || false;
-    
+    const hasFullKeywordInTitle = matchingResult.title?.toLowerCase().includes(normalizedQuery);
+
+    // More thorough URL check with normalized variants
+    const urlLower = matchingResult.url.toLowerCase();
+    const queryVariants = [
+      normalizedQuery,
+      normalizedQuery.replace(/\s+/g, '-'),
+      normalizedQuery.replace(/\s+/g, '_'),
+      normalizedQuery.replace(/\s+/g, '+'),
+      normalizedQuery.replace(/\s+/g, '')
+    ];
+    const hasFullKeywordInUrl = queryVariants.some(variant => urlLower.includes(variant));
+
+    // Improved description check - be more thorough
+    const descriptionLower = matchingResult.description?.toLowerCase() || '';
+    const hasFullKeywordInMeta = descriptionLower.includes(normalizedQuery) || 
+                                queryVariants.some(variant => descriptionLower.includes(variant));
+
+    console.log(`DETECTION RESULTS for ${source.domain}:
+      Query: "${normalizedQuery}"
+      In Title: ${hasFullKeywordInTitle} 
+      In URL: ${hasFullKeywordInUrl}
+      In Meta: ${hasFullKeywordInMeta}
+    `);
+
+    // GENERAL RULE 1: If the full query appears in title, URL, or meta description, it's a highly reliable source
     if (hasFullKeywordInTitle || hasFullKeywordInUrl || hasFullKeywordInMeta) {
-      // This is a true highly reliable source - domain is reliable and explicitly mentions the topic
       console.log(`  → Highly reliable with specific mention: ${source.domain}`);
       categorizedSources.highlyReliable.push(source);
     } else {
-      // For now, we assume it's a "no mention" source, but in reality we should:
-      // 1. Check for contextual mentions in full content (not just metadata)
+      // Not in metadata - check for contextual mentions
       
-      // THIS IS A PLACEHOLDER - in a real implementation, we would need to fetch the 
-      // full content to determine if it has contextual mentions
-      
-      // For testing, let's classify some as contextual mention if they contain parts of the query
-      const queryParts = normalizedQuery.split(' ');
-      const hasPartialKeyword = queryParts.some(part => 
-        part.length > 3 && // Ignore short words
-        (matchingResult.title.toLowerCase().includes(part) || 
-         matchingResult.description?.toLowerCase().includes(part))
+      // GENERAL RULE 2: A contextual mention is ONLY when the FULL search term appears in content (description)
+      // but isn't prominent enough to be in title/URL/meta data
+      const hasFullQueryInDescription = descriptionLower.includes(normalizedQuery);
+
+      // We'll also check for some common variants with different formatting
+      const fullQueryVariants = [
+        normalizedQuery,
+        normalizedQuery.replace(/\s+/g, '-'),
+        normalizedQuery.replace(/\s+/g, '_'),
+        normalizedQuery.replace(/\s+/g, '.')
+      ];
+
+      const hasFullQueryVariantInDescription = fullQueryVariants.some(variant => 
+        variant !== normalizedQuery && descriptionLower.includes(variant)
       );
+
+      // Log the detection results for debugging
+      console.log(`  → Content analysis for contextual mention:
+        Full search term "${normalizedQuery}" in description: ${hasFullQueryInDescription}
+        Full search term variant in description: ${hasFullQueryVariantInDescription}
+      `);
       
-      if (hasPartialKeyword) {
-        console.log(`  → Contextual mention: ${source.domain}`);
+      // GENERAL RULE 3: Strict contextual mention - ONLY when full query is in content
+      if (hasFullQueryInDescription || hasFullQueryVariantInDescription) {
+        console.log(`  → Contextual mention detected: ${source.domain}`);
+        console.log(`    Reason: Full search term found in description`);
         categorizedSources.contextualMention.push(source);
       } else {
         console.log(`  → Reliable domain but no mention: ${source.domain}`);
