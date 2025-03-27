@@ -79,15 +79,14 @@ export function UnifiedSearch() {
     });
   }, []);
 
-  // Assess Wikipedia eligibility whenever search results update
+  // Update the useEffect hook that assesses eligibility
   useEffect(() => {
     if (!isLoading && results.length > 0 && searchedQuery) {
-      // Debug logging
-      console.log(`Results found: ${results.length} organic, ${newsResults.length} news`);
-      console.log("Checking for Wikipedia article in results:");
+      // Add debug logging to track when assessment happens
+      console.log(`Running assessment for "${searchedQuery}" with ${results.length} results`);
       
-      // RESTORE THE ORIGINAL WIKIPEDIA CHECK LOGIC
-      const wikipediaResult = [...results, ...newsResults].find(r => 
+      // First, explicitly look for Wikipedia articles in the results
+      const wikipediaResult = results.find(r => 
         r.url.includes('wikipedia.org/wiki/') && 
         !r.url.includes('wikipedia.org/wiki/Category:') &&
         !r.url.includes('wikipedia.org/wiki/Wikipedia:') &&
@@ -98,16 +97,24 @@ export function UnifiedSearch() {
         !r.url.includes('wikipedia.org/wiki/File:')
       );
       
+      // Log what we found
       if (wikipediaResult) {
-        console.log("Wikipedia article found:", wikipediaResult.url);
+        console.log("Found Wikipedia article in results:", wikipediaResult.url);
       } else {
         console.log("No Wikipedia article found in results");
       }
       
-      // Pass domainCitations to the assessment function
-      const assessment = assessWikipediaEligibility(searchedQuery, results, newsResults, domainCitations);
-      console.log("Eligibility assessment:", assessment);
-      setEligibilityResult(assessment);
+      // Only now perform the assessment, passing the actual found Wikipedia URL if any
+      const eligibilityResult = assessWikipediaEligibility(
+        searchedQuery,
+        results,
+        newsResults,
+        domainCitations,
+        // Pass the actual found Wikipedia URL if any
+        wikipediaResult ? wikipediaResult.url : undefined
+      );
+      
+      setEligibilityResult(eligibilityResult);
     }
   }, [isLoading, results, newsResults, domainCitations, searchedQuery]);
 

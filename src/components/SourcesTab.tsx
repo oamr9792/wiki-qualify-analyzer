@@ -29,6 +29,23 @@ export function SourcesTab({ categorizedSources, sourcesList }: SourcesTabProps)
       <CardContent className="pt-6">
         <div className="text-lg font-medium mb-4">Source Analysis</div>
         
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+          <h3 className="text-sm font-medium text-blue-800 mb-2">How We Score Sources</h3>
+          <p className="text-xs text-blue-700 mb-2">
+            Our scoring system evaluates the reliability and diversity of sources:
+          </p>
+          <ul className="text-xs text-blue-700 list-disc pl-5 space-y-1">
+            <li><strong>Reliable sources with specific mention:</strong> 20 points each</li>
+            <li><strong>Sources with contextual mention:</strong> 7 points each</li>
+            <li><strong>Reliable sources without specific mention:</strong> 3 points each</li>
+            <li><strong>Diminishing returns:</strong> Each additional source from the same domain gets 15% fewer points</li>
+            <li><strong>Domain cap:</strong> Maximum 3 sources counted from the same domain</li>
+          </ul>
+          <p className="text-xs text-blue-700 mt-2">
+            A score of 66-74 is borderline eligible, 75+ is strongly eligible for Wikipedia.
+          </p>
+        </div>
+        
         <div className="text-sm">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
             <div className="bg-green-50 p-3 rounded-md flex flex-col items-center">

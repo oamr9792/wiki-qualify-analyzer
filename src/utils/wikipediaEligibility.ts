@@ -38,25 +38,19 @@ export function assessWikipediaEligibility(
   query: string, 
   organicResults: SearchResult[], 
   newsResults: SearchResult[] = [],
-  domainCitations: Record<string, number> = {}
+  domainCitations: Record<string, number> = {},
+  foundWikipediaUrl?: string
 ): WikipediaEligibilityResult {
-  // Add near the beginning of assessWikipediaEligibility function
-  console.log("SEARCH RESULTS:", {
-    organicCount: organicResults.length,
-    newsCount: newsResults.length,
-    organicUrls: organicResults.map(r => r.url),
-    newsUrls: newsResults.length > 0 ? newsResults.map(r => r.url) : []
-  });
+  console.log("RUNNING FIXED ELIGIBILITY ASSESSMENT!");
 
-  // Check for existing Wikipedia page first with the improved function
-  const wikipediaCheck = checkForExistingWikipedia(query, [...organicResults, ...newsResults]);
-  
-  if (wikipediaCheck.exists) {
+  // Handle existing Wikipedia page
+  const hasExistingWikipedia = !!foundWikipediaUrl;
+  if (hasExistingWikipedia) {
     return {
       eligible: true,
       score: 100,
       hasExistingWikipedia: true,
-      existingWikipediaUrl: wikipediaCheck.url,
+      existingWikipediaUrl: foundWikipediaUrl,
       reasons: ['The topic already has a Wikipedia page.'],
       suggestedAction: 'This topic already has a Wikipedia page.',
       reliableSources: {
@@ -65,33 +59,34 @@ export function assessWikipediaEligibility(
         unreliable: 0,
         deprecated: 0
       },
-      sourcesList: []
+      sourcesList: [],
+      categorizedSources: {
+        highlyReliable: [],
+        reliableNoMention: [],
+        contextualMention: [],
+        unreliable: []
+      }
     };
   }
-  
-  // Move this definition to the BEGINNING of the assessWikipediaEligibility function
-  // (after initial Wikipedia check)
+
+  // Initialize variables
   let displayScore = 0;
   let eligible = false;
   const reasons: string[] = [];
-
-  // Declare eligible here, before it's used
-  let hasExistingWikipedia = false;
-  let existingWikipediaUrl = '';
   let suggestedAction = '';
   
-  // Count reliable sources by type
+  // Initialize counters
   const reliableSources = {
-    highlyReliable: 0,   // Generally reliable (score 10)
-    moderatelyReliable: 0, // No consensus (score 5)
-    unreliable: 0,       // Generally unreliable (score 2)
-    deprecated: 0        // Deprecated (score 0)
+    highlyReliable: 0,
+    moderatelyReliable: 0,
+    unreliable: 0,
+    deprecated: 0
   };
   
-  // Create a list to track all analyzed sources
+  // Analyze all sources
   const sourcesList: AnalyzedSource[] = [];
-
-  // Analyze sources from search results
+  
+  // Process all search results
   [...organicResults, ...newsResults].forEach(result => {
     // Exclude Wikipedia from source analysis
     if (result.url.includes('wikipedia.org')) return;
@@ -152,163 +147,106 @@ export function assessWikipediaEligibility(
     }
   });
   
-  // And before the categorizedSources call:
-  console.log("SOURCE LIST BEFORE CATEGORIZATION:", sourcesList.map(s => ({ 
-    domain: s.domain, 
-    url: s.url, 
-    category: s.category,
-    relevance: s.relevance 
-  })));
-
-  // Improved source categorization with strict keyword matching
+  // Categorize sources
   const categorizedSources = categorizeSources(sourcesList, query, organicResults, newsResults);
-
-  // Count truly reliable sources - only those that mention the full keyword
+  
+  // Get counts
   const highlyReliableCount = categorizedSources.highlyReliable.length;
-  // Add contextual mentions at half value (0.5 each)
-  const contextualMentionValue = categorizedSources.contextualMention.length * 0.5;
-  // Combined effective source count (whole number + fractional part)
-  const effectiveSourceCount = highlyReliableCount + contextualMentionValue;
-
-  // Log the detailed source analysis
-  console.log("DETAILED SOURCE ANALYSIS:", {
-    query,
-    highlyReliable: categorizedSources.highlyReliable.map(s => s.domain),
-    reliableNoMention: categorizedSources.reliableNoMention.map(s => s.domain),
-    contextualMention: categorizedSources.contextualMention.map(s => s.domain),
-    highlyReliableCount,
-    contextualMentionValue,
-    effectiveSourceCount
-  });
-
-  // Apply STRICT scoring based on the effective source count
-  if (effectiveSourceCount < 1) {
-    // No reliable sources = exactly 15
-    displayScore = 15;
-    eligible = false;
-    reasons.push("No reliable sources found that specifically mention this topic. Wikipedia requires specific coverage.");
-  } 
-  else if (effectiveSourceCount < 2) {
-    // Less than 2 effective sources (e.g., 1 reliable or 2 contextual) = 25-35
-    displayScore = Math.floor(25 + (Math.random() * 11));
-    eligible = false;
-    reasons.push(`Found ${highlyReliableCount} reliable sources and ${categorizedSources.contextualMention.length} contextual mentions of this topic. Wikipedia typically requires at least 3 reliable sources.`);
-  } 
-  else if (effectiveSourceCount < 3) {
-    // Less than 3 effective sources = 40-55
-    displayScore = Math.floor(40 + (Math.random() * 16));
-    eligible = false;
-    reasons.push(`Found ${highlyReliableCount} reliable sources and ${categorizedSources.contextualMention.length} contextual mentions of this topic. This is approaching Wikipedia's notability requirements.`);
-  } 
-  else if (effectiveSourceCount < 4) {
-    // Less than 4 effective sources = 60-70
-    displayScore = Math.floor(60 + (Math.random() * 11));
-    eligible = false;
-    reasons.push(`Found ${highlyReliableCount} reliable sources and ${categorizedSources.contextualMention.length} contextual mentions of this topic. This approaches Wikipedia's notability threshold.`);
-  } 
-  else if (effectiveSourceCount < 5) {
-    // Less than 5 effective sources = 70-80
-    displayScore = Math.floor(70 + (Math.random() * 11));
-    eligible = true;
-    reasons.push(`Found ${highlyReliableCount} reliable sources and ${categorizedSources.contextualMention.length} contextual mentions of this topic. This meets Wikipedia's notability requirements.`);
-  }
-  else {
-    // 5+ effective sources = 80-100
-    displayScore = Math.floor(80 + (Math.random() * 21));
-    eligible = true;
-    reasons.push(`Found ${highlyReliableCount} reliable sources and ${categorizedSources.contextualMention.length} contextual mentions of this topic. This exceeds Wikipedia's notability requirements.`);
-  }
-
-  // Set the suggested action based on the reliable source count
-  if (hasExistingWikipedia) {
-    suggestedAction = "View or improve the existing Wikipedia article";
-  } else if (eligible) {
-    suggestedAction = "Consider creating a Wikipedia article with these reliable sources";
-  } else if (effectiveSourceCount >= 3) {
-    suggestedAction = "Approaching eligibility, but needs more high-quality reliable sources";
-  } else if (effectiveSourceCount > 0) {
-    suggestedAction = "Not currently eligible. Needs more reliable sources that specifically discuss this topic.";
-  } else {
-    suggestedAction = "Not eligible. Wikipedia requires coverage in reliable, independent sources.";
-  }
-
-  // Add clear debugging to help diagnose issues
-  console.log("SOURCE ANALYSIS FINAL:", {
-    query,
-    effectiveSourceCount,
-    score: displayScore,
-    eligible,
-    reasons,
-    sourcesWithRelevance: sourcesList.map(s => ({
-      domain: s.domain,
-      category: s.category,
-      relevance: s.relevance
-    }))
-  });
-
-  // De-duplicate sources list by domain to avoid redundant entries
-  const uniqueSources = Array.from(new Map(sourcesList.map(source => 
-    [source.domain, source]
-  )).values());
+  const uniqueDomains = new Set(categorizedSources.highlyReliable.map(s => s.domain)).size;
   
-  // Sort sources by reliability
-  uniqueSources.sort((a, b) => {
-    const reliabilityOrder = {
-      'highlyReliable': 1,
-      'moderatelyReliable': 2,
-      'unreliable': 3,
-      'deprecated': 4
-    };
+  // Track domain counts for scoring with true diminishing returns
+  const domainScores = new Map<string, number>();
+
+  // IMPORTANT: Sort all sources by domain first to process sources from the same domain together
+  const allSourcesToScore = [
+    ...categorizedSources.highlyReliable.map(s => ({...s, basePoints: 20})),
+    ...categorizedSources.contextualMention.map(s => ({...s, basePoints: 7})),
+    ...categorizedSources.reliableNoMention.map(s => ({...s, basePoints: 3}))
+  ];
+
+  // Sort by domain so same domains are processed together
+  allSourcesToScore.sort((a, b) => a.domain.localeCompare(b.domain));
+
+  // Reset score
+  displayScore = 0;
+
+  // Process all sources in a single loop with proper diminishing returns AND domain cap
+  console.log("SCORING WITH DIMINISHING RETURNS AND DOMAIN CAP (MAX 3):");
+  allSourcesToScore.forEach(source => {
+    // Get current count for this domain
+    const currentCount = domainScores.get(source.domain) || 0;
     
-    return reliabilityOrder[a.category] - reliabilityOrder[b.category];
+    // Only score up to 3 sources from the same domain
+    if (currentCount < 3) {
+      // Calculate diminishing factor - starts at 1.0, then 0.85, then 0.7225
+      const diminishingFactor = Math.pow(0.85, currentCount);
+      
+      // Calculate points with diminishing returns
+      const points = source.basePoints * diminishingFactor;
+      
+      // Add to total score
+      displayScore += points;
+      
+      // Log details
+      console.log(`${source.domain} (#${currentCount + 1}): ${points.toFixed(2)} points (base: ${source.basePoints})`);
+    } else {
+      // Log that we're ignoring this source due to domain cap
+      console.log(`${source.domain} (#${currentCount + 1}): IGNORED - Exceeded domain cap of 3`);
+    }
+    
+    // Increment domain count regardless of whether we scored it
+    domainScores.set(source.domain, currentCount + 1);
   });
+
+  // Log domain totals
+  console.log("DOMAIN TOTALS:");
+  const domainTotals = new Map<string, number>();
+  for (const [domain, count] of domainScores.entries()) {
+    let total = 0;
+    for (let i = 0; i < count; i++) {
+      // Recalculate the score for each occurrence to show diminishing returns
+      const categorySource = allSourcesToScore.find(s => s.domain === domain);
+      if (categorySource) {
+        const factor = Math.pow(0.85, i);
+        total += categorySource.basePoints * factor;
+      }
+    }
+    domainTotals.set(domain, total);
+    console.log(`${domain}: ${count} occurrences, ${total.toFixed(2)} points total`);
+  }
+
+  // Round score and apply limits
+  displayScore = Math.min(100, Math.round(displayScore));
+  displayScore = Math.max(5, displayScore);
   
-  // Define reliableSourcesCount for debug logging
-  const reliableSourcesCount = sourcesList.filter(s => 
-    s.category === 'highlyReliable' || s.category === 'moderatelyReliable'
-  ).length;
-
-  // Now the debug logging will work correctly
-  console.log("Source analysis details:", {
-    query,
-    sourcesList,
-    effectiveSourceCount,
-    reliableSourcesText: reliableSourcesCount,
-    highlyReliableCount: reliableSources.highlyReliable,
-    moderatelyReliableCount: reliableSources.moderatelyReliable
-  });
-
-  // Add this right before returning from assessWikipediaEligibility
-  console.log("CATEGORIZED SOURCES BEFORE RETURN:", {
-    highlyReliable: categorizedSources.highlyReliable.length,
-    highlyReliableDomains: categorizedSources.highlyReliable.map(s => s.domain),
-    reliableNoMention: categorizedSources.reliableNoMention.length,
-    reliableNoMentionDomains: categorizedSources.reliableNoMention.map(s => s.domain),
-    unreliable: categorizedSources.unreliable.length,
-    unreliableDomains: categorizedSources.unreliable.map(s => s.domain),
-    contextualMention: categorizedSources.contextualMention.length,
-    contextualMentionDomains: categorizedSources.contextualMention?.map(s => s.domain) || []
-  });
-
-  // Add this toward the end of the assessWikipediaEligibility function
-  console.log("ANALYSIS COMPARISON:", {
-    query: query,
-    mainAnalysisCount: effectiveSourceCount,
-    uiSourcesHighlyReliable: categorizedSources.highlyReliable.length,
-    uiSourcesReliableNoMention: categorizedSources.reliableNoMention.length,
-    uiSourcesUnreliable: categorizedSources.unreliable.length,
-    summaryMessage: reasons[0]
-  });
-
+  // Set eligibility based on score
+  eligible = displayScore >= 66;
+  
+  // Create accurate descriptive text based on actual counts
+  if (displayScore >= 75) {
+    suggestedAction = "Create a Wikipedia article with these reliable sources";
+    reasons.push(`Strong potential. Found ${highlyReliableCount} reliable sources (from ${uniqueDomains} different domains) that specifically mention this topic. This exceeds Wikipedia's notability requirements.`);
+  } else if (displayScore >= 66) {
+    suggestedAction = "Consider creating a Wikipedia draft, but it may require additional sources";
+    reasons.push(`Good potential. Found ${highlyReliableCount} reliable sources (from ${uniqueDomains} different domains) that specifically mention this topic. This meets Wikipedia's minimum notability threshold.`);
+  } else if (displayScore >= 46) {
+    suggestedAction = "Almost eligible. Find more reliable sources that specifically mention this topic.";
+    reasons.push(`Moderate potential. Found ${highlyReliableCount} reliable sources that specifically mention this topic. This approaches Wikipedia's notability requirements but needs more coverage.`);
+  } else {
+    suggestedAction = "Not eligible. Wikipedia requires more coverage in reliable, independent sources.";
+    reasons.push(`Limited potential. Found ${highlyReliableCount} reliable sources that specifically mention this topic. Wikipedia typically requires at least 3 reliable sources from different publishers.`);
+  }
+  
+  // Return the assessment result
   return {
     eligible,
     score: displayScore,
     hasExistingWikipedia,
-    existingWikipediaUrl,
+    existingWikipediaUrl: foundWikipediaUrl,
     reasons,
     suggestedAction,
     reliableSources,
-    sourcesList: uniqueSources,
+    sourcesList,
     categorizedSources
   };
 }

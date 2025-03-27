@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BookOpen, Copy, FileText, CheckCircle, AlertTriangle, AlertCircle, InfoIcon, Calendar } from 'lucide-react';
+import { BookOpen, Copy, FileText, CheckCircle, AlertTriangle, AlertCircle, InfoIcon, Calendar, ExternalLink } from 'lucide-react';
 import { AnalyzedSource } from '@/utils/wikipediaEligibility';
 import { SearchResult } from '@/services/dataForSeoService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -351,27 +351,44 @@ ${title} has significance that has been acknowledged in reliable sources. Its im
     });
   };
   
-  // If not eligible or potentially eligible, and no existing Wikipedia, show message
-  if (!eligible && !isPotentiallyEligible) {
-    return (
-      <div className="bg-muted p-8 rounded-lg text-center">
-        <p className="text-muted-foreground">
-          This topic does not appear to be eligible for a Wikipedia article based on the sources found.
-          Wikipedia requires multiple reliable, independent sources for article creation.
-        </p>
-      </div>
-    );
-  }
-  
+  // SIMPLIFIED CONDITIONAL LOGIC TO FIX DRAFT GENERATION
   if (hasExistingWikipedia) {
     return (
       <div className="bg-muted p-8 rounded-lg text-center">
         <p className="text-muted-foreground">
           This topic already has a Wikipedia article. You can contribute to the existing article rather than creating a new draft.
         </p>
+        {existingWikipediaUrl && (
+          <Button asChild variant="outline" className="mt-4">
+            <a href={existingWikipediaUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-4 w-4 mr-2" />
+              View Wikipedia Article
+            </a>
+          </Button>
+        )}
       </div>
     );
   }
+  
+  // If score is below threshold, show "insufficient sources" message
+  if (score < 66) {
+    return (
+      <div className="wiki-draft-container">
+        <div className="mt-4 p-4 bg-gray-50 rounded-md border border-gray-200">
+          <h2 className="text-lg font-medium text-gray-800 mb-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500 inline-block mr-2" />
+            Insufficient reliable sources to draft a Wikipedia article
+          </h2>
+          <p className="text-sm text-gray-600 mb-4">
+            A minimum score of 66 is recommended before creating a Wikipedia draft. Your current score is {score}.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  
+  // If we reach here, the topic is eligible for a draft
+  // ...rest of the component that generates the draft...
 
   return (
     <div className="mt-4">

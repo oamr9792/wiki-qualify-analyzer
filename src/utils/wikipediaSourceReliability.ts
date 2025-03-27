@@ -190,6 +190,7 @@ export const wikipediaSourceReliability: Record<string, SourceReliability> = {
   "globalresearch.ca": { name: "Centre for Research on Globalisation", reliability: "Deprecated", score: 0 },
   "telesurtv.net": { name: "Telesur", reliability: "Deprecated", score: 0 },
   "southfront.org": { name: "SouthFront", reliability: "Deprecated", score: 0 },
+  "timesofisrael.com": { name: "Times of Israel", reliability: "Generally reliable", score: 10 },
 };
 
 // Add citation count cache
