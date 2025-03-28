@@ -214,43 +214,30 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
           </div>
 
           <div className="space-y-3">
-            {/* Status, Analysis and Score on one line */}
-            <div className="flex items-center justify-between border-b pb-2 mb-4">
-              {/* Left: Status - With color coding */}
-              <div className="flex items-center mr-2 min-w-[120px]">
-                {/* Icon already has appropriate colors */}
-                {result.eligible ? (
-                  <CheckCircle className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
-                ) : result.score > 40 ? (
-                  <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 flex-shrink-0" />
-                ) : (
-                  <XCircle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
-                )}
-                <div>
-                  <h3 className={`font-medium whitespace-nowrap ${
-                    result.eligible 
-                      ? "text-green-600" 
-                      : result.score > 40 
-                        ? "text-amber-500" 
-                        : "text-red-500"
-                  }`}>
-                    {result.eligible ? "Eligible" : result.score > 40 ? "Potentially Eligible" : "Not Eligible"}
-                  </h3>
+            {/* Status, Analysis and Score in one row */}
+            <div className="flex items-center justify-between">
+              {/* Left Side: Status Icon + Analysis Text */}
+              <div className="flex items-center grow">
+                <div className="mr-3">
+                  {result.eligible ? (
+                    <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">
+                      <CheckCircle className="h-6 w-6 text-green-500" />
+                    </div>
+                  ) : result.score >= 60 ? (
+                    <div className="w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center">
+                      <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+                      <XCircle className="h-6 w-6 text-red-500" />
+                    </div>
+                  )}
                 </div>
-              </div>
-              
-              {/* Middle: Analysis summary with more detailed explanation */}
-              <div className="text-sm text-gray-700 flex-grow px-2">
-                <span className={`font-medium ${result.eligible ? "text-green-600" : result.score > 40 ? "text-amber-600" : "text-gray-600"}`}>
-                  {result.eligible ? "Strong potential. " : 
-                   result.score > 65 ? "Good potential. " : 
-                   result.score > 40 ? "Shows potential. " : 
-                   "Limited coverage. "}
-                </span>
-                <span className="text-gray-600">
-                  {result.score === 15 ? (
-                    "No reliable sources found that specifically mention this topic. Wikipedia requires specific coverage."
-                  ) : result.score >= 80 ? (
+                <span className="text-sm text-gray-600 grow pr-4">
+                  {/* Existing analysis text */}
+                  {result.eligible ? (
+                    "This topic appears to be eligible for a Wikipedia page based on reliable sources."
+                  ) : result.score >= 90 ? (
                     `Found ${result.sourcesList.filter(s => 
                       (s.category === 'highlyReliable' || s.category === 'moderatelyReliable') && 
                       s.relevance === 'high'
@@ -267,10 +254,27 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
                 </span>
               </div>
               
-              {/* Right: Score */}
-              <div className="flex flex-col items-center justify-center min-w-[60px] ml-2">
-                <div className="text-xs text-gray-600">Score</div>
-                <div className="font-bold text-xl">{Math.round(result.score)}</div>
+              {/* Right: Score - REPLACED WITH NEW TOOLTIP VERSION */}
+              <div className="flex items-center">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-1">
+                        <span className="text-2xl font-bold px-2 py-1 bg-blue-50 rounded-md border border-blue-100">
+                          {Math.round(result.score)}
+                        </span>
+                        <HelpCircle className="h-4 w-4 text-gray-400" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-white p-2 shadow-lg rounded-md border max-w-xs">
+                      <p className="text-sm">A score of 70 or higher is typically needed for Wikipedia eligibility. 
+                      Scores of 65-69 are borderline and may require additional sources.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <div className="text-xs text-gray-500 ml-1">
+                  {score >= 70 ? "Eligible" : score >= 65 ? "Borderline" : "Not Eligible"}
+                </div>
               </div>
             </div>
             
