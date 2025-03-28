@@ -21,7 +21,7 @@ function App() {
             </main>
             <footer className="mt-16 py-6 border-t border-gray-300">
               <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-                <p className="font-serif italic">© 2025 All rights reserved.</p>
+                <p className="font-serif italic">© www.reputationcitadel.com 2025 All rights reserved.</p>
               </div>
             </footer>
           </Router>
