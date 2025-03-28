@@ -52,86 +52,26 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
         // Direct popup if Calendly API is not available
         const width = 1000;
         const height = 750;
-        const left = (window.innerWidth - width) / 2;
-        const top = (window.innerHeight - height) / 2;
-        
+        const left = (screen.width / 2) - (width / 2);
+        const top = (screen.height / 2) - (height / 2);
         window.open(
           calendlyUrl,
-          'Calendly',
-          `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`
+          'CalendlyPopup',
+          `width=${width},height=${height},top=${top},left=${left}`
         );
       }
+    } else {
+      // Fallback for non-browser environments
+      console.log('Calendly scheduling link:', calendlyUrl);
     }
   };
-  
-  // Helper function to check if domain is in predefined list
-  const isInPredefinedList = (domain: string) => {
-    return Object.keys(wikipediaSourceReliability).some(key => {
-      return domain === key || domain.endsWith(`.${key}`);
-    });
-  };
-  
-  // Format reliability category badge
-  const formatReliabilityBadge = (source: AnalyzedSource) => {
-    switch (source.category) {
-      case 'highlyReliable':
-        return (
-          <Badge variant="success" className="text-xs">
-            <CheckCircle className="h-3 w-3 mr-1 inline-block" />
-            Generally reliable
-          </Badge>
-        );
-      case 'moderatelyReliable':
-        return (
-          <Badge variant="outline" className="text-xs">
-            <HelpCircle className="h-3 w-3 mr-1 inline-block" />
-            No consensus
-          </Badge>
-        );
-      case 'unreliable':
-        return (
-          <Badge variant="destructive" className="text-xs">
-            <XCircle className="h-3 w-3 mr-1 inline-block" />
-            Generally unreliable
-          </Badge>
-        );
-      case 'deprecated':
-        return (
-          <Badge variant="destructive" className="text-xs">
-            <XCircle className="h-3 w-3 mr-1 inline-block" />
-            Deprecated
-          </Badge>
-        );
-      default:
-        return (
-          <Badge variant="outline" className="text-xs">
-            <HelpCircle className="h-3 w-3 mr-1 inline-block" />
-            Unknown
-          </Badge>
-        );
-    }
-  };
-  
-  // First, update the groupedSources object to include unknown/no consensus sources
-  const groupedSources = {
-    highlyReliable: result.sourcesList.filter(s => s.category === 'highlyReliable'),
-    moderatelyReliable: result.sourcesList.filter(s => s.category === 'moderatelyReliable'),
-    unreliable: result.sourcesList.filter(s => s.category === 'unreliable'),
-    deprecated: result.sourcesList.filter(s => s.category === 'deprecated'),
-    noConsensus: result.sourcesList.filter(s => !['highlyReliable', 'moderatelyReliable', 'unreliable', 'deprecated'].includes(s.category))
-  };
-  
-  // At the beginning of the component, calculate the counts consistently
-  const reliableSourcesCount =
-    result.sourcesList.filter(s => 
-      s.category === 'highlyReliable' || s.category === 'moderatelyReliable'
-    ).length;
 
-  const highlyReliableCount = result.sourcesList.filter(s => s.category === 'highlyReliable').length;
-  const moderatelyReliableCount = result.sourcesList.filter(s => s.category === 'moderatelyReliable').length;
+  // Count the ACTUAL highly reliable sources with high relevance
+  const highlyReliableCount = categorizedSources?.highlyReliable?.length || 0;
+  const contextualMentionCount = categorizedSources?.contextualMention?.length || 0;
   
-  // Update the component to show a simplified message for existing Wikipedia articles
-  if (result.hasExistingWikipedia && result.existingWikipediaUrl) {
+  // Handle the case where the topic already has a Wikipedia page
+  if (hasExistingWikipedia && existingWikipediaUrl) {
     return (
       <div className="mb-6">
         <Alert variant="default" className="bg-green-50 border-green-200 mb-4">
@@ -142,7 +82,7 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
                 This topic already has a Wikipedia article
               </p>
               <a 
-                href={result.existingWikipediaUrl} 
+                href={existingWikipediaUrl} 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-green-700 underline text-sm"
@@ -180,89 +120,67 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
     <div className="h-full overflow-auto">
       <div className="p-4">
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-xl font-medium">Wikipedia Eligibility Analysis</h3>
-              <p className="text-sm text-gray-500">For: {query}</p>
-            </div>
-            <div className="flex items-center">
-              <div className="text-right">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">Score:</span>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1">
-                          <span className="text-2xl font-bold px-2 py-1 bg-blue-50 rounded-md border border-blue-100">
-                            {score}
-                          </span>
-                          <HelpCircle className="h-4 w-4 text-gray-400" />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent className="bg-white p-2 shadow-lg rounded-md border max-w-xs">
-                        <p className="text-sm">A score of 70 or higher is typically needed for Wikipedia eligibility. 
-                        Scores of 65-69 are borderline and may require additional sources.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {score >= 70 ? "Eligible" : score >= 65 ? "Borderline" : "Not Eligible"}
-                </div>
-              </div>
-            </div>
+          {/* Title and subject, no score here */}
+          <div>
+            <h3 className="text-xl font-medium">Wikipedia Eligibility Analysis</h3>
+            <p className="text-sm text-gray-500">For: {query}</p>
           </div>
 
           <div className="space-y-3">
-            {/* Status, Analysis and Score in one row */}
-            <div className="flex items-center justify-between">
-              {/* Left Side: Status Icon + Analysis Text */}
-              <div className="flex items-center grow">
-                <div className="mr-3">
-                  {result.eligible ? (
-                    <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">
-                      <CheckCircle className="h-6 w-6 text-green-500" />
-                    </div>
-                  ) : result.score >= 60 ? (
-                    <div className="w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center">
-                      <AlertTriangle className="h-6 w-6 text-yellow-500" />
-                    </div>
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
-                      <XCircle className="h-6 w-6 text-red-500" />
-                    </div>
-                  )}
+            {/* Status, Analysis and Score on one line */}
+            <div className="flex items-center justify-between border-b pb-2 mb-4">
+              {/* Left: Status - With color coding */}
+              <div className="flex items-center mr-2 min-w-[120px]">
+                {/* Icon already has appropriate colors */}
+                {eligible ? (
+                  <CheckCircle className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
+                ) : score > 40 ? (
+                  <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 flex-shrink-0" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
+                )}
+                <div>
+                  <h3 className={`font-medium whitespace-nowrap ${
+                    eligible 
+                      ? "text-green-600" 
+                      : score > 40 
+                        ? "text-amber-500" 
+                        : "text-red-500"
+                  }`}>
+                    {eligible ? "Eligible" : score > 40 ? "Potentially Eligible" : "Not Eligible"}
+                  </h3>
                 </div>
-                <span className="text-sm text-gray-600 grow pr-4">
-                  {/* Existing analysis text */}
-                  {result.eligible ? (
-                    "This topic appears to be eligible for a Wikipedia page based on reliable sources."
-                  ) : result.score >= 90 ? (
-                    `Found ${result.sourcesList.filter(s => 
-                      (s.category === 'highlyReliable' || s.category === 'moderatelyReliable') && 
-                      s.relevance === 'high'
-                    ).length} reliable sources specifically mentioning this topic. This exceeds Wikipedia's notability requirements.`
-                  ) : result.score >= 70 ? (
-                    "Found four reliable sources specifically mentioning this topic. This meets Wikipedia's notability requirements."
-                  ) : result.score >= 60 ? (
-                    "Found three reliable sources specifically mentioning this topic. This approaches Wikipedia's notability threshold."
-                  ) : result.score >= 40 ? (
+              </div>
+              
+              {/* Middle: Analysis summary with more detailed explanation */}
+              <div className="text-sm text-gray-700 flex-grow px-2">
+                <span className={`font-medium ${eligible ? "text-green-600" : score > 40 ? "text-amber-600" : "text-gray-600"}`}>
+                  {eligible ? "Strong potential. " : 
+                   score > 65 ? "Good potential. " : 
+                   score > 40 ? "Shows potential. " : 
+                   "Limited coverage. "}
+                </span>
+                <span className="text-gray-600">
+                  {/* IMPORTANT: This now uses the ACTUAL count of sources */}
+                  {highlyReliableCount === 0 ? (
+                    "No reliable sources found that specifically mention this topic. Wikipedia requires specific coverage."
+                  ) : highlyReliableCount === 1 ? (
+                    "Found one reliable source specifically mentioning this topic. Wikipedia typically requires at least 3."
+                  ) : highlyReliableCount === 2 ? (
                     "Found two reliable sources specifically mentioning this topic. Wikipedia typically requires at least 3."
                   ) : (
-                    "Found one reliable source specifically mentioning this topic. Wikipedia typically requires at least 3."
+                    `Found ${highlyReliableCount} reliable sources specifically mentioning this topic. This meets Wikipedia's notability guidelines.`
                   )}
                 </span>
               </div>
               
-              {/* Right: Score - REPLACED WITH NEW TOOLTIP VERSION */}
-              <div className="flex items-center">
+              {/* Right: Score - WITH TOOLTIP */}
+              <div className="flex flex-col items-center justify-center min-w-[60px] ml-2">
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center gap-1">
-                        <span className="text-2xl font-bold px-2 py-1 bg-blue-50 rounded-md border border-blue-100">
-                          {Math.round(result.score)}
-                        </span>
+                        <div className="font-bold text-xl">{Math.round(score)}</div>
                         <HelpCircle className="h-4 w-4 text-gray-400" />
                       </div>
                     </TooltipTrigger>
@@ -272,28 +190,28 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                <div className="text-xs text-gray-500 ml-1">
+                <div className="text-xs text-gray-500 mt-1">
                   {score >= 70 ? "Eligible" : score >= 65 ? "Borderline" : "Not Eligible"}
                 </div>
               </div>
             </div>
             
             {/* Call to action when not eligible */}
-            {!result.eligible && !result.hasExistingWikipedia && (
+            {!eligible && !hasExistingWikipedia && (
               <div className="mt-6 border rounded-md p-4 bg-gray-50">
                 {/* Display the heading and text directly instead of in a dialog */}
                 <div className="mb-4">
                   <h2 className="text-xl font-medium mb-3">
-                    {result.score >= 65 ? (
+                    {score >= 65 ? (
                       <>You Could be Eligible for a Wikipedia Page</>
-                    ) : result.score >= 45 ? (
+                    ) : score >= 45 ? (
                       <>You're Close — But Not Quite There</>
                     ) : (
                       <>You're Not Ready (Yet)</>
                     )}
                   </h2>
                   
-                  {result.score < 45 ? (
+                  {score < 45 ? (
                     <div className="space-y-3 text-sm text-gray-600 text-left">
                       <p>
                         Wikipedia only allows pages about topics that meet its strict standards for notability and credibility. 
@@ -308,7 +226,7 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
                         and reputation—so you're ready for Wikipedia when it counts.
                       </p>
                     </div>
-                  ) : result.score < 65 ? (
+                  ) : score < 65 ? (
                     <div className="space-y-3 text-sm text-gray-600 text-left">
                       <p>
                         You're on the right track. Your subject shows some signs of notability, but it needs a stronger 
@@ -341,9 +259,9 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
                     className="w-full bg-[#17163e] hover:bg-[#232253] text-white"
                   >
                     <Calendar className="h-4 w-4 mr-2" />
-                    {result.score >= 65 ? (
+                    {score >= 65 ? (
                       <>Schedule a Free Consultation</>
-                    ) : result.score >= 45 ? (
+                    ) : score >= 45 ? (
                       <>Book a Free Consultation</>
                     ) : (
                       <>Book a Free Call</>

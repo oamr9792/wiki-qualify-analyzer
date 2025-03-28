@@ -43,29 +43,26 @@ export function assessWikipediaEligibility(
 ): WikipediaEligibilityResult {
   console.log("RUNNING FIXED ELIGIBILITY ASSESSMENT!");
 
-  // Handle existing Wikipedia page
-  const hasExistingWikipedia = !!foundWikipediaUrl;
+  // Fix for the "Wikipedia exists" issue:
+  // Only mark as existing if we specifically found a Wikipedia URL and it's not empty
+  const hasExistingWikipedia = !!foundWikipediaUrl && foundWikipediaUrl.trim() !== '';
+  
   if (hasExistingWikipedia) {
+    console.log("FOUND VALID WIKIPEDIA URL:", foundWikipediaUrl);
     return {
       eligible: true,
       score: 100,
       hasExistingWikipedia: true,
       existingWikipediaUrl: foundWikipediaUrl,
       reasons: ['The topic already has a Wikipedia page.'],
-      suggestedAction: 'This topic already has a Wikipedia page.',
+      suggestedAction: 'None needed.',
       reliableSources: {
         highlyReliable: 0,
         moderatelyReliable: 0,
         unreliable: 0,
         deprecated: 0
       },
-      sourcesList: [],
-      categorizedSources: {
-        highlyReliable: [],
-        reliableNoMention: [],
-        contextualMention: [],
-        unreliable: []
-      }
+      sourcesList: []
     };
   }
 
