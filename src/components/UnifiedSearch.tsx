@@ -79,39 +79,72 @@ export function UnifiedSearch() {
     });
   }, []);
 
+  // Function to strictly detect Wikipedia pages in search results
+  const findWikipediaUrl = (query: string, results: SearchResult[]): string => {
+    console.log("Checking for Wikipedia URL for:", query);
+    
+    if (!query || !results || !results.length) {
+      console.log("No query or results to check for Wikipedia");
+      return '';
+    }
+    
+    // Normalize the query for comparison
+    const normalizedQuery = query.toLowerCase().trim();
+    
+    // Check each result for a Wikipedia URL
+    for (const result of results) {
+      // Ensure it's a Wikipedia URL
+      if (result.url && (
+        result.url.includes('wikipedia.org/wiki/') || 
+        result.url.includes('en.wikipedia.org/')
+      )) {
+        console.log("Found potential Wikipedia URL:", result.url);
+        
+        // Extract the article title from the URL
+        try {
+          const urlObj = new URL(result.url);
+          const pathParts = urlObj.pathname.split('/');
+          const articleName = pathParts[pathParts.length - 1];
+          
+          // Decode the article name and normalize
+          const decodedArticle = decodeURIComponent(articleName).toLowerCase().replace(/_/g, ' ');
+          
+          // Check if the article name matches or contains the query
+          if (decodedArticle === normalizedQuery || 
+              decodedArticle.includes(normalizedQuery) || 
+              normalizedQuery.includes(decodedArticle)) {
+            console.log("CONFIRMED Wikipedia match for:", query, "Article:", decodedArticle);
+            return result.url;
+          } else {
+            console.log("Wikipedia URL found but doesn't match query. URL:", result.url, "Query:", query);
+          }
+        } catch (error) {
+          console.error("Error parsing Wikipedia URL:", error);
+        }
+      }
+    }
+    
+    console.log("No matching Wikipedia URL found for:", query);
+    return '';
+  };
+
   // Update the useEffect hook that assesses eligibility
   useEffect(() => {
     if (!isLoading && results.length > 0 && searchedQuery) {
       // Add debug logging to track when assessment happens
       console.log(`Running assessment for "${searchedQuery}" with ${results.length} results`);
       
-      // First, explicitly look for Wikipedia articles in the results
-      const wikipediaResult = results.find(r => 
-        r.url.includes('wikipedia.org/wiki/') && 
-        !r.url.includes('wikipedia.org/wiki/Category:') &&
-        !r.url.includes('wikipedia.org/wiki/Wikipedia:') &&
-        !r.url.includes('wikipedia.org/wiki/Template:') &&
-        !r.url.includes('wikipedia.org/wiki/Help:') &&
-        !r.url.includes('wikipedia.org/wiki/Portal:') &&
-        !r.url.includes('wikipedia.org/wiki/Talk:') &&
-        !r.url.includes('wikipedia.org/wiki/File:')
-      );
+      // After getting search results:
+      const wikipediaUrl = findWikipediaUrl(searchedQuery, [...results, ...newsResults]);
+      console.log("Wikipedia URL determination:", wikipediaUrl ? "FOUND" : "NOT FOUND", wikipediaUrl);
       
-      // Log what we found
-      if (wikipediaResult) {
-        console.log("Found Wikipedia article in results:", wikipediaResult.url);
-      } else {
-        console.log("No Wikipedia article found in results");
-      }
-      
-      // Only now perform the assessment, passing the actual found Wikipedia URL if any
+      // Pass the URL (or empty string) to the assessment function
       const eligibilityResult = assessWikipediaEligibility(
-        searchedQuery,
-        results,
+        searchedQuery, 
+        results, 
         newsResults,
         domainCitations,
-        // Pass the actual found Wikipedia URL if any
-        wikipediaResult ? wikipediaResult.url : undefined
+        wikipediaUrl
       );
       
       setEligibilityResult(eligibilityResult);
