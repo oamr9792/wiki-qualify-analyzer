@@ -1,6 +1,5 @@
 import { useState } from 'react';
 
-// Use the proxied endpoint instead of direct server access
 const API_ENDPOINT = '/api/search';
 
 export interface SearchResult {
@@ -10,48 +9,26 @@ export interface SearchResult {
   position: number;
   type?: string;
   rank?: number;
-  source?: string; // To differentiate organic vs news
-  date?: string; // For news articles
+  source?: string;
+  date?: string;
 }
 
-interface SearchResponse {
-  results: SearchResult[];
-  newsResults: SearchResult[];
-  totalCount: number;
-  newsCount: number;
-  isLoading: boolean;
-  error: string | null;
-  rawData?: any; // For debugging
-}
-
-// Simple helper to check if the server is running
 const checkServerHealth = async () => {
   try {
-    // Make sure to use the right path to the health check API
     const response = await fetch('/api/health', {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      headers: { 'Content-Type': 'application/json' }
     });
-    
-    // If we get *any* response, even if it's not 200, continue
-    // This prevents blocking searches due to minor API issues
     if (!response.ok) {
       console.warn('Health check returned non-200 status:', response.status);
-      // Continue anyway - don't block the search
       return;
     }
-    
     const data = await response.json();
-    
     if (!data.api_credentials_available) {
       throw new Error('API credentials not configured');
     }
   } catch (error) {
     console.warn('Server health check warning:', error);
-    // Continue anyway - don't block the search
-    // This allows the app to work even if the health check fails
   }
 };
 
@@ -69,38 +46,33 @@ export const useDataForSeoSearch = () => {
     setError(null);
     setResults([]);
     setNewsResults([]);
-    
+
     try {
-      // Try the health check, but proceed even if it fails
       try {
         await checkServerHealth();
       } catch (healthError) {
         console.warn('Health check error, continuing anyway:', healthError);
       }
-      
+
       console.log(`Making request to: ${API_ENDPOINT}`);
-      
-      // Make API requests through the Vite proxy
+
+      // Increased depth: 100 organic + 50 news for wider source coverage
       const organicResponse = await fetch(API_ENDPOINT, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           keyword: query,
-          depth: 30,
+          depth: 100,
           se_type: 'organic'
         }),
       });
-      
+
       const newsResponse = await fetch(API_ENDPOINT, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           keyword: query,
-          depth: 20,
+          depth: 50,
           se_type: 'news'
         }),
       });
@@ -111,42 +83,36 @@ export const useDataForSeoSearch = () => {
 
       const organicData = await organicResponse.json();
       const newsData = await newsResponse.json();
-      
-      // Store raw data for debugging
+
       setRawData({ organic: organicData, news: newsData });
-      
-      // Process organic results
-      const organicResults = organicData.tasks?.[0]?.result?.[0]?.items || [];
-      
-      // Process news results
+
+      const organicItems = organicData.tasks?.[0]?.result?.[0]?.items || [];
       const newsItems = newsData.tasks?.[0]?.result?.[0]?.items || [];
-      console.log('News API raw items:', newsItems?.slice(0, 2));
-      console.log('News API item types:', newsItems?.map(item => item.type));
-      
-      // Format the search results
-      const formattedOrganic = organicResults
-        .filter(item => item.type === 'organic')
-        .map((item, index) => ({
-          title: item.title,
-          url: item.url,
-          description: item.description || "No description available",
+
+      console.log('Total organic items from API:', organicItems.length);
+      console.log('Total news items from API:', newsItems.length);
+
+      const formattedOrganic = organicItems
+        .filter((item: any) => item.type === 'organic')
+        .map((item: any, index: number) => ({
+          title: item.title || '',
+          url: item.url || '',
+          description: item.description || 'No description available',
           position: index + 1,
           type: item.type,
           rank: item.rank_absolute || item.rank_group,
           source: 'organic'
         }));
-        
-      // Format the news results - handle multiple item types from Google News API
-      const formattedNews = [];
+
+      const formattedNews: SearchResult[] = [];
 
       for (const item of newsItems) {
-        // Handle top_stories item type which contains nested news items
         if (item.type === 'top_stories' && Array.isArray(item.items)) {
-          item.items.forEach((storyItem, storyIndex) => {
+          item.items.forEach((storyItem: any) => {
             formattedNews.push({
-              title: storyItem.title,
-              url: storyItem.url,
-              description: storyItem.source ? `Source: ${storyItem.source}` : "No description available",
+              title: storyItem.title || '',
+              url: storyItem.url || '',
+              description: storyItem.source ? `Source: ${storyItem.source}` : 'No description available',
               position: formattedNews.length + 1,
               type: 'news',
               rank: storyItem.rank_absolute || storyItem.rank_group || formattedNews.length + 1,
@@ -154,13 +120,11 @@ export const useDataForSeoSearch = () => {
               date: storyItem.date || storyItem.timestamp
             });
           });
-        } 
-        // Handle news_search item type (standard news result)
-        else if (item.type === 'news_search') {
+        } else if (item.type === 'news_search') {
           formattedNews.push({
-            title: item.title,
-            url: item.url,
-            description: item.snippet || "No description available",
+            title: item.title || '',
+            url: item.url || '',
+            description: item.snippet || 'No description available',
             position: formattedNews.length + 1,
             type: 'news',
             rank: item.rank_absolute || item.rank_group,
@@ -169,38 +133,37 @@ export const useDataForSeoSearch = () => {
           });
         }
       }
-      
-      console.log(`Processed ${formattedNews.length} news items`);
-      
-      // Update state with formatted results
+
+      console.log(`Processed ${formattedOrganic.length} organic results and ${formattedNews.length} news results`);
+
       setResults(formattedOrganic);
       setNewsResults(formattedNews);
       setTotalCount(formattedOrganic.length);
       setNewsCount(formattedNews.length);
-      
-      console.log(`Found ${formattedOrganic.length} organic results and ${formattedNews.length} news results`);
-      
+
     } catch (error) {
       console.error('Error searching:', error);
-      
-      // If we can't connect to the API, use mock data instead of showing an error
-      console.log('Using mock data as fallback');
-      
-      // Mock some results based on the query
-      const mockResults = [
+
+      // Fallback mock results
+      const mockResults: SearchResult[] = [
         {
           title: `${query} - Wikipedia`,
           url: `https://en.wikipedia.org/wiki/${query.replace(/\s+/g, '_')}`,
-          description: `Information about ${query} from Wikipedia, the free encyclopedia.`
+          description: `Information about ${query} from Wikipedia, the free encyclopedia.`,
+          position: 1,
+          type: 'organic',
+          source: 'organic'
         },
         {
           title: `About ${query} - Official Website`,
           url: `https://www.${query.toLowerCase().replace(/\s+/g, '')}.com`,
-          description: `Official website for ${query}. Learn more about our services and history.`
+          description: `Official website for ${query}. Learn more about our services and history.`,
+          position: 2,
+          type: 'organic',
+          source: 'organic'
         },
-        // Add a few more mock results
       ];
-      
+
       setResults(mockResults);
       setNewsResults([]);
       setTotalCount(mockResults.length);
@@ -220,4 +183,4 @@ export const useDataForSeoSearch = () => {
     rawData,
     searchGoogle
   };
-}; 
+};
