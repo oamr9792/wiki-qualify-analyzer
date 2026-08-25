@@ -66,16 +66,47 @@ function titleToUrl(title: string): string {
 
 // ── API plumbing ─────────────────────────────────────────────────────────────
 
-async function apiGet(params: Record<string, string>): Promise<any> {
+/**
+ * Calls the MediaWiki API, retrying transient failures.
+ *
+ * Worth the retry: when this call fails we fall back to "no article found", and
+ * a network blip should not be presented to the user as a verification failure.
+ */
+async function apiGet(params: Record<string, string>, attempts = 3): Promise<any> {
   const url = new URL(WIKI_API);
   const merged = { format: 'json', origin: '*', ...params };
   Object.entries(merged).forEach(([k, v]) => url.searchParams.append(k, v));
 
-  const response = await fetch(url.toString());
-  if (!response.ok) {
-    throw new Error(`MediaWiki API returned ${response.status}`);
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10_000);
+      try {
+        const response = await fetch(url.toString(), { signal: controller.signal });
+        if (!response.ok) {
+          // 4xx responses are deterministic — retrying will not help.
+          if (response.status >= 400 && response.status < 500) {
+            throw new Error(`MediaWiki API returned ${response.status}`);
+          }
+          throw Object.assign(new Error(`MediaWiki API returned ${response.status}`), {
+            retryable: true,
+          });
+        }
+        return await response.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (error: any) {
+      lastError = error;
+      const retryable = error?.retryable || error?.name === 'AbortError' || error?.name === 'TypeError';
+      if (!retryable || attempt === attempts) break;
+      await new Promise(resolve => setTimeout(resolve, 300 * attempt));
+    }
   }
-  return response.json();
+
+  throw lastError instanceof Error ? lastError : new Error('MediaWiki API request failed');
 }
 
 /**

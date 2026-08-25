@@ -127,6 +127,32 @@ async function main() {
   }, 'Jane Doe');
   check('interview is primary and fails', interview.status === 'fails', interview.failures.map(f => f.policy).join(','));
 
+  // Regression: found live in production. The slug said "interview" but only
+  // phrases like "interview with" were matched, so it counted as coverage.
+  const slugInterview = evaluateSource(
+    { url: 'https://www.theguardian.com/technology/2024/mar/12/marc-benioff-interview' },
+    'Marc Benioff',
+  );
+  check(
+    'interview detected from the URL slug alone',
+    slugInterview.status === 'fails' && slugInterview.failures.some(f => f.policy === 'WP:PRIMARY'),
+    `${slugInterview.status} | ${slugInterview.failures.map(f => f.policy).join(',')}`,
+  );
+  check(
+    '…and is marked primary-but-independent, not "not independent"',
+    slugInterview.independent === true && slugInterview.secondary === false,
+    `independent=${slugInterview.independent} secondary=${slugInterview.secondary}`,
+  );
+
+  const pressReleaseNotSecondaryConfusion = evaluateSource({
+    url: 'https://www.prnewswire.com/news-releases/acme-1.html',
+  }, 'Acme Corp');
+  check(
+    'a press release is flagged not-independent (a different gate)',
+    pressReleaseNotSecondaryConfusion.independent === false,
+    `independent=${pressReleaseNotSecondaryConfusion.independent}`,
+  );
+
   const listicle = evaluateSource({
     url: 'https://www.inc.com/lists/30-under-30-2024',
     title: '30 Under 30: Jane Doe and other rising stars',
