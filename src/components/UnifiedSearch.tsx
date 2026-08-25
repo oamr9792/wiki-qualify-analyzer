@@ -16,8 +16,31 @@ import { getEffectiveDomain } from '@/utils/domainUtils';
 import { WikipediaArticleDraft } from '@/components/WikipediaArticleDraft';
 import { isSearchAllowed, incrementSearchCount, getRemainingSearches, getTimeUntilReset, getReadableTimeUntilReset } from '@/services/rateLimitService';
 import { SourcesTab } from '@/components/SourcesTab';
+import { SourceChecker } from '@/components/SourceChecker';
+import { checkWikipediaExistence, WikipediaExistenceResult } from '@/services/wikipediaExistenceService';
+
+type AnalyserMode = 'entity' | 'checker';
+
+/** Switches between analysing an entity and checking a pasted list of sources. */
+function ModeToggle({ mode, setMode }: { mode: AnalyserMode; setMode: (m: AnalyserMode) => void }) {
+  const base = 'px-4 py-2 text-sm rounded-md transition-colors';
+  const on = 'bg-[#17163e] text-white';
+  const off = 'bg-transparent text-gray-600 hover:bg-gray-100';
+
+  return (
+    <div className="flex justify-center gap-1 mb-4 p-1 bg-gray-100 rounded-lg self-center">
+      <button type="button" onClick={() => setMode('entity')} className={`${base} ${mode === 'entity' ? on : off}`}>
+        Analyse an entity
+      </button>
+      <button type="button" onClick={() => setMode('checker')} className={`${base} ${mode === 'checker' ? on : off}`}>
+        Check my sources
+      </button>
+    </div>
+  );
+}
 
 export function UnifiedSearch() {
+  const [mode, setMode] = useState<AnalyserMode>('entity');
   const [query, setQuery] = useState('');
   const [modifierKeyword1, setModifierKeyword1] = useState('');
   const [modifierKeyword2, setModifierKeyword2] = useState('');
@@ -79,77 +102,41 @@ export function UnifiedSearch() {
     });
   }, []);
 
-  // Function to strictly detect Wikipedia pages in search results
-  const findWikipediaUrl = (query: string, results: SearchResult[]): string => {
-    console.log("Checking for Wikipedia URL for:", query);
-    
-    if (!query || !results || !results.length) {
-      console.log("No query or results to check for Wikipedia");
-      return '';
-    }
-    
-    // Normalize the query for comparison
-    const normalizedQuery = query.toLowerCase().trim();
-    
-    // Check each result for a Wikipedia URL
-    for (const result of results) {
-      // Ensure it's a Wikipedia URL
-      if (result.url && (
-        result.url.includes('wikipedia.org/wiki/') || 
-        result.url.includes('en.wikipedia.org/')
-      )) {
-        console.log("Found potential Wikipedia URL:", result.url);
-        
-        // Extract the article title from the URL
-        try {
-          const urlObj = new URL(result.url);
-          const pathParts = urlObj.pathname.split('/');
-          const articleName = pathParts[pathParts.length - 1];
-          
-          // Decode the article name and normalize
-          const decodedArticle = decodeURIComponent(articleName).toLowerCase().replace(/_/g, ' ');
-          
-          // Check if the article name matches or contains the query
-          if (decodedArticle === normalizedQuery || 
-              decodedArticle.includes(normalizedQuery) || 
-              normalizedQuery.includes(decodedArticle)) {
-            console.log("CONFIRMED Wikipedia match for:", query, "Article:", decodedArticle);
-            return result.url;
-          } else {
-            console.log("Wikipedia URL found but doesn't match query. URL:", result.url, "Query:", query);
-          }
-        } catch (error) {
-          console.error("Error parsing Wikipedia URL:", error);
-        }
-      }
-    }
-    
-    console.log("No matching Wikipedia URL found for:", query);
-    return '';
-  };
-
-  // Update the useEffect hook that assesses eligibility
+  // Whether an article already exists is now answered by the MediaWiki API
+  // rather than inferred from Google results. The previous implementation
+  // substring-matched the query against Wikipedia URLs in the SERP, so searching
+  // "Orani Amroussi" matched en.wikipedia.org/wiki/Orani (a town in Sardinia)
+  // and reported a non-existent article as existing.
   useEffect(() => {
-    if (!isLoading && results.length > 0 && searchedQuery) {
-      // Add debug logging to track when assessment happens
-      console.log(`Running assessment for "${searchedQuery}" with ${results.length} results`);
-      
-      // After getting search results:
-      const wikipediaUrl = findWikipediaUrl(searchedQuery, [...results, ...newsResults]);
-      console.log("Wikipedia URL determination:", wikipediaUrl ? "FOUND" : "NOT FOUND", wikipediaUrl);
-      
-      // Pass the URL (or empty string) to the assessment function
-      const eligibilityResult = assessWikipediaEligibility(
-        searchedQuery, 
-        results, 
-        newsResults,
-        domainCitations,
-        wikipediaUrl
+    if (isLoading || results.length === 0 || !searchedQuery) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      const contextTerms = [modifierKeyword1, modifierKeyword2]
+        .map(t => t.trim())
+        .filter(Boolean);
+
+      let existence: WikipediaExistenceResult | null = null;
+      try {
+        existence = await checkWikipediaExistence(searchedQuery, contextTerms);
+      } catch (err) {
+        console.error('Existence check failed; scoring sources only.', err);
+      }
+
+      if (cancelled) return;
+
+      setEligibilityResult(
+        assessWikipediaEligibility(searchedQuery, results, newsResults, existence),
       );
-      
-      setEligibilityResult(eligibilityResult);
-    }
-  }, [isLoading, results, newsResults, domainCitations, searchedQuery]);
+    };
+
+    run();
+    return () => { cancelled = true; };
+    // modifierKeyword1/2 are intentionally excluded: the assessment should
+    // reflect the query as it was searched, not later edits to the input boxes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, results, newsResults, searchedQuery]);
 
   // Fix the useEffect that gets the user IP and checks admin mode
   useEffect(() => {
@@ -465,8 +452,18 @@ export function UnifiedSearch() {
     }
   }, [isLoading]);
 
+  if (mode === 'checker') {
+    return (
+      <div className="max-w-5xl w-full flex flex-col p-0">
+        <ModeToggle mode={mode} setMode={setMode} />
+        <SourceChecker />
+      </div>
+    );
+  }
+
   return (
     <div className={`max-w-5xl w-full ${results.length > 0 ? 'h-screen' : ''} flex flex-col p-0`}>
+      <ModeToggle mode={mode} setMode={setMode} />
       <Card className={`${results.length > 0 ? 'mb-4' : 'mb-0 w-full'} shadow-sm border-gray-200 p-0`}>
         <CardContent className={`${results.length > 0 ? 'pt-4 pb-3' : 'py-6'}`}>
           <form onSubmit={handleSearch} className="flex flex-col gap-2">
@@ -563,11 +560,22 @@ export function UnifiedSearch() {
         </div>
       )}
 
-      {errorMessage && (
+      {/* `errorMessage` is the rate-limit notice; `error` comes from the search
+          API. The latter used to be swallowed while fabricated results were
+          shown in its place, so it must be visible. */}
+      {(errorMessage || error) && !isLoading && (
         <Alert variant="destructive" className="mt-2 mb-4">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{errorMessage}</AlertDescription>
+          <AlertTitle>{errorMessage ? 'Error' : 'Search could not be completed'}</AlertTitle>
+          <AlertDescription>
+            {errorMessage || error}
+            {!errorMessage && (
+              <span className="block mt-1 text-xs">
+                No analysis is shown because no real search results were returned. Please try
+                again in a moment.
+              </span>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -602,9 +610,9 @@ export function UnifiedSearch() {
               {/* Sources Tab */}
               <TabsContent value="sources" className="h-full overflow-auto m-0 p-0">
                 {eligibilityResult && (
-                  <SourcesTab 
-                    categorizedSources={eligibilityResult.categorizedSources} 
-                    sourcesList={eligibilityResult.sourcesList} 
+                  <SourcesTab
+                    categorized={eligibilityResult.categorized}
+                    notability={eligibilityResult.notability}
                   />
                 )}
               </TabsContent>

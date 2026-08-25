@@ -1,14 +1,51 @@
 import { SearchResult } from "@/services/dataForSeoService";
-import { getSourceReliability } from "./wikipediaSourceReliability";
-import { getEffectiveDomain } from "./domainUtils";
+import {
+  evaluateSource,
+  assessNotability,
+  SourceVerdict,
+  NotabilityAssessment,
+} from "./sourceEvaluation";
+import type { WikipediaExistenceResult } from "@/services/wikipediaExistenceService";
+
+/**
+ * wikipediaEligibility.ts
+ *
+ * Turns a set of search results into a Wikipedia notability assessment.
+ *
+ * Every judgement here delegates to `sourceEvaluation.evaluateSource`, so the
+ * entity analyser and the standalone source checker cannot disagree.
+ *
+ * WHAT CHANGED AND WHY
+ * --------------------
+ * The previous scorer awarded 20 points per "reliable" source based on the
+ * domain alone, then added a hash-derived random component (±3.9) plus a bonus
+ * for longer query strings, purely so the numbers looked organic. Both have been
+ * removed: the noise could flip the eligible/not-eligible verdict at the 66-point
+ * boundary, and query length is not evidence of notability.
+ *
+ * The score is now a deterministic function of how many independent, reliable,
+ * in-depth sources exist — which is what actually decides a deletion discussion.
+ */
 
 export interface AnalyzedSource {
   url: string;
   domain: string;
+  /** Human-readable reliability label. */
   reliability: string;
+  /** Retained for backwards compatibility with existing components. */
   category: 'highlyReliable' | 'moderatelyReliable' | 'unreliable' | 'deprecated';
-  citationCount?: number;
   relevance: 'high' | 'low';
+  /** Full policy verdict — the authoritative field. */
+  verdict: SourceVerdict;
+}
+
+export interface CategorizedSources {
+  /** Clears all four gates — counts toward WP:GNG. */
+  qualifying: AnalyzedSource[];
+  /** Reliable and independent but coverage is thin or context-dependent. */
+  supporting: AnalyzedSource[];
+  /** Fails a hard gate — press releases, directories, deprecated outlets. */
+  rejected: AnalyzedSource[];
 }
 
 export interface WikipediaEligibilityResult {
@@ -16,392 +53,149 @@ export interface WikipediaEligibilityResult {
   score: number;
   hasExistingWikipedia: boolean;
   existingWikipediaUrl?: string;
+  /** Full result of the MediaWiki existence check. */
+  existence: WikipediaExistenceResult | null;
   reasons: string[];
   suggestedAction: string;
-  reliableSources: {
-    highlyReliable: number;
-    moderatelyReliable: number;
-    unreliable: number;
-    deprecated: number;
-  };
   sourcesList: AnalyzedSource[];
-  categorizedSources?: {
-    highlyReliable: AnalyzedSource[];
-    reliableNoMention: AnalyzedSource[];
-    contextualMention: AnalyzedSource[];
-    unreliable: AnalyzedSource[];
-  };
+  categorized: CategorizedSources;
+  notability: NotabilityAssessment;
 }
 
-// ─── Press release / promotional signal detection ───────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
-const PRESS_RELEASE_URL_SIGNALS = [
-  '/press-release/', '/press_release/', '/pressrelease/',
-  '/news-release/', '/newswire/', 'prnewswire.com', 'businesswire.com',
-  'globenewswire.com', 'marketwired.com', 'cision.com', 'prweb.com',
-  'accesswire.com', 'einpresswire.com', 'pr.com/', '/releases/',
-  'send2press.com', 'prlog.org', 'newswire.com', 'prfire.co.uk',
-  'openpr.com', 'prurgent.com', 'i-newswire.com', 'free-press-release.com',
-  'pressroom.com', 'pressreleasepoint.com', 'prnews.io',
-];
+function toLegacyCategory(verdict: SourceVerdict): AnalyzedSource['category'] {
+  if (verdict.tier === 'deprecated') return 'deprecated';
+  if (verdict.status === 'counts') return 'highlyReliable';
+  if (verdict.status === 'partial') return 'moderatelyReliable';
+  return 'unreliable';
+}
 
-const PROMOTIONAL_TITLE_SIGNALS = [
-  'announces', 'launches', 'releases', 'introduces', 'unveils',
-  'partners with', 'named to', 'wins award', 'appoints', 'expands to',
-  'raises $', 'closes $', 'secures funding', 'proud to announce',
-  'is pleased to announce', 'signs agreement', 'completes acquisition',
-  'selected as', 'recognized as', 'honored as', 'celebrates',
-  'awarded', 'named winner',
-];
-
-// Tier-1 outlets that can write promotional-sounding headlines legitimately
-const TIER_1_DOMAINS = new Set([
-  'reuters.com', 'apnews.com', 'bbc.com', 'bbc.co.uk', 'theguardian.com',
-  'nytimes.com', 'wsj.com', 'washingtonpost.com', 'ft.com', 'bloomberg.com',
-  'economist.com', 'forbes.com', 'cnbc.com', 'cnn.com', 'nbcnews.com',
-  'abcnews.go.com', 'cbsnews.com', 'latimes.com', 'usatoday.com',
-  'time.com', 'theatlantic.com', 'newyorker.com', 'politico.com',
-  'axios.com', 'vox.com', 'wired.com', 'theverge.com', 'techcrunch.com',
-  'arstechnica.com', 'engadget.com', 'variety.com', 'hollywoodreporter.com',
-  'rollingstone.com', 'independent.co.uk', 'telegraph.co.uk', 'thetimes.co.uk',
-  'afp.com', 'aljazeera.com', 'dw.com', 'spiegel.de', 'haaretz.com',
-  'timesofisrael.com', 'jpost.com', 'smh.com.au', 'theage.com.au',
-]);
-
-function isPressRelease(url: string, title: string, description: string): boolean {
-  const urlLower = url.toLowerCase();
-  const titleLower = title.toLowerCase();
-  const descLower = description.toLowerCase();
-
-  if (PRESS_RELEASE_URL_SIGNALS.some(signal => urlLower.includes(signal))) {
-    return true;
+/** De-duplicates results by normalised URL, keeping the first occurrence. */
+function dedupeResults(results: SearchResult[]): SearchResult[] {
+  const seen = new Set<string>();
+  const out: SearchResult[] = [];
+  for (const r of results) {
+    if (!r.url) continue;
+    const key = r.url
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/[?#].*$/, '')
+      .replace(/\/$/, '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
   }
-
-  // If title AND description both have promotional signals, likely a press release
-  const titleHasPromo = PROMOTIONAL_TITLE_SIGNALS.some(s => titleLower.includes(s));
-  const descHasPromo = PROMOTIONAL_TITLE_SIGNALS.some(s => descLower.includes(s));
-  if (titleHasPromo && descHasPromo) {
-    return true;
-  }
-
-  return false;
+  return out;
 }
 
-function isPromotionalContent(url: string, title: string, description: string, domain: string): boolean {
-  if (TIER_1_DOMAINS.has(domain)) return false;
-  const titleLower = title.toLowerCase();
-  return PROMOTIONAL_TITLE_SIGNALS.some(s => titleLower.includes(s));
-}
-
-// ─── Organic score variation ─────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Generates a small deterministic variation so the same query always produces
- * the same score, but different queries produce naturally different decimals.
- * Range: roughly ±4 points.
+ * Assesses whether `query` meets Wikipedia's general notability guideline.
+ *
+ * @param query      The subject being assessed.
+ * @param organic    Organic search results.
+ * @param news       News search results.
+ * @param existence  Result of `checkWikipediaExistence`. Pass null if the check
+ *                   has not completed — the assessment then proceeds on sources
+ *                   alone rather than guessing.
  */
-function queryNoise(query: string): number {
-  const hash = query.trim().toLowerCase().split('').reduce((acc, ch) => {
-    return ((acc << 5) - acc) + ch.charCodeAt(0);
-  }, 0);
-  // Map to -3.9 … +3.9 with one decimal of precision
-  const raw = ((Math.abs(hash) % 79) - 39) / 10;
-  return raw;
-}
-
-// ─── Main eligibility assessment ─────────────────────────────────────────────
-
 export function assessWikipediaEligibility(
   query: string,
-  organicResults: SearchResult[],
-  newsResults: SearchResult[] = [],
-  domainCitations: Record<string, number> = {},
-  foundWikipediaUrl?: string
+  organic: SearchResult[],
+  news: SearchResult[] = [],
+  existence: WikipediaExistenceResult | null = null,
 ): WikipediaEligibilityResult {
 
-  // Early return if Wikipedia page already exists
-  const hasExistingWikipedia = !!foundWikipediaUrl && foundWikipediaUrl.trim() !== '';
-  if (hasExistingWikipedia) {
+  const allResults = dedupeResults([...organic, ...news])
+    .filter(r => r.url && !r.url.includes('wikipedia.org'));
+
+  // ── Evaluate every source against Wikipedia sourcing policy ────────────────
+  const sourcesList: AnalyzedSource[] = allResults.map(result => {
+    const verdict = evaluateSource(
+      { url: result.url, title: result.title, description: result.description },
+      query,
+    );
+
     return {
-      eligible: true,
-      score: 100,
-      hasExistingWikipedia: true,
-      existingWikipediaUrl: foundWikipediaUrl,
-      reasons: ['The topic already has a Wikipedia page.'],
-      suggestedAction: 'None needed.',
-      reliableSources: { highlyReliable: 0, moderatelyReliable: 0, unreliable: 0, deprecated: 0 },
-      sourcesList: []
+      url: result.url,
+      domain: verdict.domain,
+      reliability: verdict.outletName
+        ? `${verdict.outletName} — ${verdict.headline}`
+        : verdict.headline,
+      category: toLegacyCategory(verdict),
+      relevance: verdict.coverage === 'significant' ? 'high' : 'low',
+      verdict,
     };
-  }
-
-  const reliableSources = { highlyReliable: 0, moderatelyReliable: 0, unreliable: 0, deprecated: 0 };
-  const sourcesList: AnalyzedSource[] = [];
-
-  // Build source list from all results
-  const allResults = [...organicResults, ...newsResults];
-
-  allResults.forEach(result => {
-    if (!result.url || result.url.includes('wikipedia.org')) return;
-
-    try {
-      const domain = getEffectiveDomain(result.url);
-      const citationCount = domainCitations[domain] || 0;
-      const reliability = getSourceReliability(result.url, citationCount);
-
-      const hasKeywordInTitle = result.title.toLowerCase().includes(query.toLowerCase());
-      const hasKeywordInUrl = result.url.toLowerCase().includes(query.toLowerCase());
-      const relevance: 'high' | 'low' = (hasKeywordInTitle || hasKeywordInUrl) ? 'high' : 'low';
-
-      let category: 'highlyReliable' | 'moderatelyReliable' | 'unreliable' | 'deprecated';
-
-      if (reliability.inPredefinedList && reliability.reliability === 'Deprecated') {
-        category = 'deprecated';
-      } else if (reliability.score >= 8) {
-        category = 'highlyReliable';
-      } else if (reliability.score >= 4) {
-        category = 'moderatelyReliable';
-      } else {
-        category = 'unreliable';
-      }
-
-      sourcesList.push({ url: result.url, domain, reliability: reliability.reliability, category, citationCount: reliability.citationCount, relevance });
-    } catch {
-      // skip bad URLs
-    }
   });
 
-  // Categorise sources
-  const categorizedSources = categorizeSources(sourcesList, query, organicResults, newsResults);
+  const categorized: CategorizedSources = {
+    qualifying: sourcesList.filter(s => s.verdict.status === 'counts'),
+    supporting: sourcesList.filter(s => s.verdict.status === 'partial'),
+    rejected:   sourcesList.filter(s => s.verdict.status === 'fails'),
+  };
 
-  // ── Scoring ─────────────────────────────────────────────────────────────────
-  const domainScores = new Map<string, number>();
-  let rawScore = 0;
+  const notability = assessNotability(sourcesList.map(s => s.verdict));
 
-  const allSourcesToScore = [
-    ...categorizedSources.highlyReliable.map(s => ({ ...s, basePoints: 20 })),
-    ...categorizedSources.contextualMention.map(s => ({ ...s, basePoints: 7 })),
-    ...categorizedSources.reliableNoMention.map(s => ({ ...s, basePoints: 3 })),
-  ];
+  // ── Existing-article handling ──────────────────────────────────────────────
+  // An existing article is reported alongside the assessment, never instead of
+  // it: the old code short-circuited to a hard-coded score of 100, which meant a
+  // single false positive produced a completely fabricated result.
+  const hasExistingWikipedia = existence?.status === 'exists';
 
-  // Sort so same-domain sources are grouped
-  allSourcesToScore.sort((a, b) => a.domain.localeCompare(b.domain));
+  const reasons: string[] = [];
+  let suggestedAction: string;
 
-  allSourcesToScore.forEach(source => {
-    const currentCount = domainScores.get(source.domain) || 0;
-    if (currentCount < 3) {
-      const diminishingFactor = Math.pow(0.85, currentCount);
-      rawScore += source.basePoints * diminishingFactor;
-    }
-    domainScores.set(source.domain, currentCount + 1);
-  });
-
-  // Organic bonuses based on coverage breadth
-  const domainCount = domainScores.size;
-  const newsBonus = newsResults.length > 5 ? 2.8 : newsResults.length > 2 ? 1.4 : 0;
-  const diversityBonus = domainCount > 8 ? 4.1 : domainCount > 5 ? 2.3 : domainCount > 3 ? 1.1 : 0;
-  const queryLengthBonus = query.trim().split(/\s+/).length > 2 ? 1.7 : 0;
-  const noise = queryNoise(query); // deterministic, ±3.9
-
-  let displayScore = rawScore + newsBonus + diversityBonus + queryLengthBonus + noise;
-
-  // Clamp and keep one decimal place so scores look real (e.g. 47.3, 62.8)
-  displayScore = Math.min(97, Math.max(7, displayScore));
-  displayScore = Math.round(displayScore * 10) / 10;
-
-  const eligible = displayScore >= 66;
-  const highlyReliableCount = categorizedSources.highlyReliable.length;
-  const uniqueDomains = new Set(categorizedSources.highlyReliable.map(s => s.domain)).size;
-
-  let reasons: string[] = [];
-  let suggestedAction = '';
-
-  if (displayScore >= 75) {
-    suggestedAction = 'Create a Wikipedia article with these reliable sources';
-    reasons.push(`Strong potential. Found ${highlyReliableCount} reliable sources (from ${uniqueDomains} different domains) that specifically mention this topic. This exceeds Wikipedia's notability requirements.`);
-  } else if (displayScore >= 66) {
-    suggestedAction = 'Consider creating a Wikipedia draft, but gather additional sources first';
-    reasons.push(`Good potential. Found ${highlyReliableCount} reliable sources (from ${uniqueDomains} different domains) specifically mentioning this topic. This meets Wikipedia's minimum notability threshold.`);
-  } else if (displayScore >= 46) {
-    suggestedAction = 'Almost eligible. Find more reliable, independent sources that specifically cover this topic.';
-    reasons.push(`Moderate potential. Found ${highlyReliableCount} reliable sources mentioning this topic. Wikipedia typically requires at least 3 reliable independent sources for notability.`);
+  if (hasExistingWikipedia) {
+    reasons.push(existence!.explanation);
+    reasons.push(
+      `Source analysis still ran: ${notability.qualifyingCount} of ${sourcesList.length} sources found would count toward notability.`,
+    );
+    suggestedAction = 'An article already exists. Any work here would be editing that article, not creating one.';
   } else {
-    suggestedAction = 'Not yet eligible. Wikipedia requires more coverage in reliable, independent sources.';
-    reasons.push(`Limited potential. Found ${highlyReliableCount} reliable sources mentioning this topic. Wikipedia requires significant coverage in multiple independent reliable sources.`);
+    if (existence?.status === 'ambiguous') {
+      reasons.push(`Possible existing article: ${existence.explanation}`);
+    } else if (existence?.status === 'not_found') {
+      reasons.push(existence.explanation);
+    }
+
+    reasons.push(notability.verdict);
+
+    const rejectedCount = categorized.rejected.length;
+    if (rejectedCount > 0) {
+      const prCount = categorized.rejected.filter(s =>
+        s.verdict.failures.some(f => f.policy === 'WP:ORGIND' || f.policy === 'WP:FORBESCON'),
+      ).length;
+      if (prCount > 0) {
+        reasons.push(
+          `${prCount} source${prCount === 1 ? '' : 's'} were excluded as press releases, syndicated wire copy, sponsored placements or contributor posts. These are the most common reason a draft is rejected at review.`,
+        );
+      }
+    }
+
+    if (notability.score >= 80) {
+      suggestedAction = 'Strong case. Draft the article, citing the qualifying sources listed below.';
+    } else if (notability.eligible) {
+      suggestedAction = 'Borderline but arguable. Add one or two more independent, in-depth sources before submitting to reduce the chance of rejection.';
+    } else if (notability.qualifyingDomains >= 2) {
+      suggestedAction = `Not yet. You need qualifying coverage from at least ${3 - notability.qualifyingDomains} more independent publisher${3 - notability.qualifyingDomains === 1 ? '' : 's'}.`;
+    } else {
+      suggestedAction = 'Not eligible. Wikipedia requires substantial, independent coverage from multiple reliable publishers — press releases and profiles you placed do not count.';
+    }
   }
 
   return {
-    eligible,
-    score: displayScore,
+    eligible: notability.eligible,
+    score: notability.score,
     hasExistingWikipedia,
-    existingWikipediaUrl: foundWikipediaUrl,
+    existingWikipediaUrl: existence?.url || undefined,
+    existence,
     reasons,
     suggestedAction,
-    reliableSources,
     sourcesList,
-    categorizedSources
+    categorized,
+    notability,
   };
 }
-
-// ─── Source categorisation ────────────────────────────────────────────────────
-
-const categorizeSources = (
-  sourcesList: AnalyzedSource[],
-  query: string,
-  organicResults: SearchResult[],
-  newsResults: SearchResult[]
-) => {
-  const categorized = {
-    highlyReliable: [] as AnalyzedSource[],
-    reliableNoMention: [] as AnalyzedSource[],
-    contextualMention: [] as AnalyzedSource[],
-    unreliable: [] as AnalyzedSource[],
-  };
-
-  const allResults = [...organicResults, ...newsResults];
-  const processedUrls = new Set<string>();
-  const normalizedQuery = query.toLowerCase().trim();
-
-  const findMatchingResult = (sourceUrl: string): SearchResult | undefined => {
-    const norm = (u: string) => u.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
-    const normSource = norm(sourceUrl);
-    return allResults.find(r => norm(r.url) === normSource);
-  };
-
-  sourcesList.forEach(source => {
-    if (processedUrls.has(source.url)) return;
-    processedUrls.add(source.url);
-
-    // Unreliable / deprecated → straight to unreliable bucket
-    const isReliableDomain = source.category === 'highlyReliable' || source.category === 'moderatelyReliable';
-    if (!isReliableDomain) {
-      categorized.unreliable.push(source);
-      return;
-    }
-
-    const matchingResult = findMatchingResult(source.url);
-    if (!matchingResult) {
-      categorized.reliableNoMention.push(source);
-      return;
-    }
-
-    const urlLower = matchingResult.url.toLowerCase();
-    const titleLower = matchingResult.title.toLowerCase();
-    const descLower = (matchingResult.description || '').toLowerCase();
-
-    // ── Press release check ──────────────────────────────────────────────────
-    if (isPressRelease(urlLower, titleLower, descLower)) {
-      console.log(`🚫 PRESS RELEASE filtered: ${source.url}`);
-      categorized.unreliable.push({ ...source, reliability: 'Press release (not independent)' });
-      return;
-    }
-
-    // ── Keyword presence checks ──────────────────────────────────────────────
-    const hasFullKeywordInTitle = titleLower.includes(normalizedQuery);
-
-    const urlVariants = [
-      normalizedQuery,
-      normalizedQuery.replace(/\s+/g, '-'),
-      normalizedQuery.replace(/\s+/g, '_'),
-    ];
-    const hasFullKeywordInUrl = urlVariants.some(variant =>
-      urlLower.includes('/' + variant + '/') ||
-      urlLower.includes('/' + variant + '.') ||
-      urlLower.endsWith('/' + variant) ||
-      urlLower.includes(variant + '.com') ||
-      urlLower.includes(variant + '.org') ||
-      urlLower.includes(variant + '.net')
-    );
-
-    const hasFullKeywordInMeta = descLower.includes(normalizedQuery);
-
-    if (hasFullKeywordInTitle || hasFullKeywordInUrl || hasFullKeywordInMeta) {
-      // Downgrade promotional content from non-tier-1 sources
-      if (isPromotionalContent(urlLower, matchingResult.title, matchingResult.description || '', source.domain)) {
-        console.log(`⚠️ PROMOTIONAL downgraded to contextual: ${source.url}`);
-        categorized.contextualMention.push(source);
-      } else {
-        console.log(`✅ RELIABLE SOURCE: ${source.url}`);
-        categorized.highlyReliable.push(source);
-      }
-    } else {
-      // Check for contextual mention in description only
-      const hasVariantInDesc = urlVariants.some(v => descLower.includes(v));
-      if (hasVariantInDesc) {
-        categorized.contextualMention.push(source);
-      } else {
-        categorized.reliableNoMention.push(source);
-      }
-    }
-  });
-
-  return categorized;
-};
-
-// ─── Helpers kept for backwards compatibility ────────────────────────────────
-
-export function analyzeSourceReliability(sources: string[]) {
-  const result = {
-    highlyReliableSources: [] as string[],
-    moderatelyReliableSources: [] as string[],
-    unreliableSources: [] as string[],
-    deprecatedSources: [] as string[],
-    notEnoughDataSources: [] as string[],
-    highlyReliableCount: 0,
-    moderatelyReliableCount: 0,
-    unreliableCount: 0,
-    deprecatedCount: 0,
-    notEnoughDataCount: 0
-  };
-
-  sources.forEach(source => {
-    const reliabilityData = getSourceReliability(source);
-    if (reliabilityData.reliability === 'Generally reliable') {
-      result.highlyReliableSources.push(source);
-      result.highlyReliableCount++;
-    } else if (reliabilityData.reliability === 'No consensus') {
-      result.moderatelyReliableSources.push(source);
-      result.moderatelyReliableCount++;
-    } else if (reliabilityData.reliability === 'Generally unreliable') {
-      result.unreliableSources.push(source);
-      result.unreliableCount++;
-    } else if (reliabilityData.reliability === 'Deprecated') {
-      result.deprecatedSources.push(source);
-      result.deprecatedCount++;
-    } else {
-      result.notEnoughDataSources.push(source);
-      result.notEnoughDataCount++;
-    }
-  });
-
-  return result;
-}
-
-export const checkForExistingWikipedia = (
-  query: string,
-  results: SearchResult[]
-): { exists: boolean; url: string | null } => {
-  const normalizedQuery = query.trim().toLowerCase();
-
-  const wikipediaResult = results.find(result => {
-    if (!result.url.includes('wikipedia.org/wiki/')) return false;
-    if (
-      result.url.includes('wikipedia.org/wiki/Category:') ||
-      result.url.includes('wikipedia.org/wiki/Wikipedia:') ||
-      result.url.includes('wikipedia.org/wiki/Template:') ||
-      result.url.includes('wikipedia.org/wiki/Help:') ||
-      result.url.includes('wikipedia.org/wiki/Portal:') ||
-      result.url.includes('wikipedia.org/wiki/Talk:') ||
-      result.url.includes('wikipedia.org/wiki/File:') ||
-      result.url.includes('wikipedia.org/wiki/List_of')
-    ) return false;
-
-    const titleWithoutSuffix = result.title.replace(/ - Wikipedia.*$/, '').toLowerCase();
-    return (
-      titleWithoutSuffix === normalizedQuery ||
-      normalizedQuery.includes(titleWithoutSuffix) ||
-      titleWithoutSuffix.includes(normalizedQuery)
-    );
-  });
-
-  return { exists: !!wikipediaResult, url: wikipediaResult ? wikipediaResult.url : null };
-};

@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "server": "node server.js",
-    "dev:full": "concurrently \"npm run server\" \"npm run dev\""
+    "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
+    "verify": "esbuild scripts/verify-evaluation.ts --bundle --platform=node --format=esm --target=node20 --outfile=node_modules/.cache/verify-evaluation.mjs --log-level=warning && node node_modules/.cache/verify-evaluation.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

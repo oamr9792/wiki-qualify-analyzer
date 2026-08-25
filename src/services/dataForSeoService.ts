@@ -56,29 +56,30 @@ export const useDataForSeoSearch = () => {
 
       console.log(`Making request to: ${API_ENDPOINT}`);
 
-      // Increased depth: 100 organic + 50 news for wider source coverage
-      const organicResponse = await fetch(API_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          keyword: query,
-          depth: 100,
-          se_type: 'organic'
-        }),
-      });
+      const post = (body: Record<string, unknown>) =>
+        fetch(API_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
 
-      const newsResponse = await fetch(API_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          keyword: query,
-          depth: 50,
-          se_type: 'news'
-        }),
-      });
+      // Issued in parallel. Awaiting these sequentially doubled wall-clock time
+      // and was pushing the serverless function past its execution limit.
+      const [organicResponse, newsResponse] = await Promise.all([
+        post({ keyword: query, depth: 100, se_type: 'organic' }),
+        post({ keyword: query, depth: 50, se_type: 'news' }),
+      ]);
 
       if (!organicResponse.ok || !newsResponse.ok) {
-        throw new Error('Search API request failed');
+        const failed = !organicResponse.ok ? organicResponse : newsResponse;
+        let detail = `HTTP ${failed.status}`;
+        try {
+          const body = await failed.json();
+          if (body?.error) detail = body.details ? `${body.error} — ${body.details}` : body.error;
+        } catch {
+          /* response was not JSON; keep the status code */
+        }
+        throw new Error(detail);
       }
 
       const organicData = await organicResponse.json();
@@ -144,30 +145,22 @@ export const useDataForSeoSearch = () => {
     } catch (error) {
       console.error('Error searching:', error);
 
-      // Fallback mock results
-      const mockResults: SearchResult[] = [
-        {
-          title: `${query} - Wikipedia`,
-          url: `https://en.wikipedia.org/wiki/${query.replace(/\s+/g, '_')}`,
-          description: `Information about ${query} from Wikipedia, the free encyclopedia.`,
-          position: 1,
-          type: 'organic',
-          source: 'organic'
-        },
-        {
-          title: `About ${query} - Official Website`,
-          url: `https://www.${query.toLowerCase().replace(/\s+/g, '')}.com`,
-          description: `Official website for ${query}. Learn more about our services and history.`,
-          position: 2,
-          type: 'organic',
-          source: 'organic'
-        },
-      ];
-
-      setResults(mockResults);
+      // Previously this fabricated two fake results — a Wikipedia URL built from
+      // the query and "https://www.<query>.com" as an "official website". Those
+      // were then scored as if they were real search results, so every failed
+      // search silently produced a plausible-looking but invented analysis.
+      //
+      // Surfacing the failure is the only honest option: an analysis built on
+      // invented sources is worse than no analysis.
+      setResults([]);
       setNewsResults([]);
-      setTotalCount(mockResults.length);
+      setTotalCount(0);
       setNewsCount(0);
+      setError(
+        error instanceof Error
+          ? `Search failed: ${error.message}`
+          : 'Search failed for an unknown reason.',
+      );
     } finally {
       setIsLoading(false);
     }

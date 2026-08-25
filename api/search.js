@@ -31,22 +31,41 @@ export default async function handler(req, res) {
     }
     const credentials = Buffer.from(`${apiUsername}:${apiPassword}`).toString('base64');
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${credentials}`
-      },
-      body: JSON.stringify([
-        {
-          language_code: 'en',
-          location_code: 2840, // United States
-          keyword,
-          depth,
-          search_param: se_type === 'news' ? 'tbm=nws' : undefined
-        }
-      ])
-    });
+    // Abort before the platform kills the function, so the client receives a
+    // usable error instead of Vercel's opaque FUNCTION_INVOCATION_TIMEOUT.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45_000);
+
+    let response;
+    try {
+      response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${credentials}`
+        },
+        body: JSON.stringify([
+          {
+            language_code: 'en',
+            location_code: 2840, // United States
+            keyword,
+            depth,
+            search_param: se_type === 'news' ? 'tbm=nws' : undefined
+          }
+        ]),
+        signal: controller.signal
+      });
+    } catch (fetchError) {
+      if (fetchError?.name === 'AbortError') {
+        return res.status(504).json({
+          error: 'Search provider timed out',
+          details: `DataForSEO did not respond within 45s for "${keyword}" (depth ${depth}).`
+        });
+      }
+      throw fetchError;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const text = await response.text();
@@ -54,6 +73,16 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
+
+    // DataForSEO reports per-task failures inside a 200 response.
+    const task = data?.tasks?.[0];
+    if (task && task.status_code && task.status_code !== 20000) {
+      return res.status(502).json({
+        error: 'DataForSEO task failed',
+        details: `${task.status_code}: ${task.status_message || 'unknown task error'}`
+      });
+    }
+
     return res.status(200).json(data);
   } catch (error) {
     console.error('API error:', error);
