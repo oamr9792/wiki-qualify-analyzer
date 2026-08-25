@@ -700,10 +700,16 @@ export function assessNotability(verdicts: SourceVerdict[]): NotabilityAssessmen
     score = 66 + Math.min(29, (weightedTotal - 2.7) * 5.5);
   }
 
-  // A hard cap when there simply are not enough distinct publishers. Wikipedia
-  // does not accept one outlet, however good, as proof of notability.
-  if (qualifyingDomains < 2) score = Math.min(score, 45);
-  if (qualifyingDomains === 2) score = Math.min(score, 62);
+  // Hard caps when there are not enough distinct publishers. Wikipedia does not
+  // accept one outlet, however good, as proof of notability.
+  //
+  // Zero qualifying sources is capped hardest: a large pile of supporting
+  // material is not "nearly there", and without this a subject with dozens of
+  // directory listings lands at the same 45 as one with a single strong
+  // article, which reads as far more encouraging than the evidence warrants.
+  if (qualifying.length === 0) score = Math.min(score, 30);
+  else if (qualifyingDomains < 2) score = Math.min(score, 45);
+  else if (qualifyingDomains === 2) score = Math.min(score, 62);
 
   score = Math.round(Math.max(0, Math.min(100, score)) * 10) / 10;
 

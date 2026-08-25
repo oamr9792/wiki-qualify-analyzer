@@ -362,6 +362,30 @@ async function main() {
   const emptyAssessment = assessNotability([]);
   check('no sources at all scores minimum', emptyAssessment.score <= 10, `score=${emptyAssessment.score}`);
 
+  // A pile of directory listings must not score the same as one strong article.
+  const manyJunkSources = assessNotability(
+    Array.from({ length: 40 }, (_, i) =>
+      evaluateSource({ url: `https://www.crunchbase.com/person/jane-doe-${i}` }, 'Jane Doe'),
+    ),
+  );
+  check(
+    '40 directory listings score no higher than 30',
+    manyJunkSources.score <= 30 && manyJunkSources.qualifyingCount === 0,
+    `score=${manyJunkSources.score} qualifying=${manyJunkSources.qualifyingCount}`,
+  );
+
+  const oneStrongSource = assessNotability([
+    evaluateSource(
+      { url: 'https://www.bbc.co.uk/news/jane-doe-profile', title: 'Jane Doe: a profile' },
+      'Jane Doe',
+    ),
+  ]);
+  check(
+    'one strong article outscores 40 directory listings',
+    oneStrongSource.score > manyJunkSources.score,
+    `strong=${oneStrongSource.score} junk=${manyJunkSources.score}`,
+  );
+
   // ═══════════════════════════════════════════════════════════════════════════
   console.log(`\n\x1b[1mResult: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed > 0) {

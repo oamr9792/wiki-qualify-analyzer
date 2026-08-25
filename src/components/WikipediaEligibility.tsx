@@ -163,22 +163,25 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
               {/* Left: Status - With color coding */}
               <div className="flex items-center mr-2 min-w-[120px]">
                 {/* Icon already has appropriate colors */}
+                {/* Thresholds must match the score badge below, otherwise the
+                    header can read "Potentially Eligible" beside a "Not
+                    Eligible" badge for the same score. */}
                 {eligible ? (
                   <CheckCircle className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
-                ) : score > 40 ? (
+                ) : score >= 55 ? (
                   <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 flex-shrink-0" />
                 ) : (
                   <XCircle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
                 )}
                 <div>
                   <h3 className={`font-medium whitespace-nowrap ${
-                    eligible 
-                      ? "text-green-600" 
-                      : score > 40 
-                        ? "text-amber-500" 
+                    eligible
+                      ? "text-green-600"
+                      : score >= 55
+                        ? "text-amber-500"
                         : "text-red-500"
                   }`}>
-                    {eligible ? "Eligible" : score > 40 ? "Potentially Eligible" : "Not Eligible"}
+                    {eligible ? "Eligible" : score >= 55 ? "Borderline" : "Not Eligible"}
                   </h3>
                 </div>
               </div>
