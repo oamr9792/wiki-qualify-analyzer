@@ -24,8 +24,10 @@ export default async function handler(req, res) {
       ? 'https://api.dataforseo.com/v3/serp/google/news/live/advanced'
       : 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced';
 
-    const apiUsername = process.env.DATAFORSEO_API_USERNAME;
-    const apiPassword = process.env.DATAFORSEO_API_PASSWORD;
+    // Trimmed: credentials pasted into a dashboard commonly carry a trailing
+    // newline or space, which produces an opaque 40100 from DataForSEO.
+    const apiUsername = process.env.DATAFORSEO_API_USERNAME?.trim();
+    const apiPassword = process.env.DATAFORSEO_API_PASSWORD?.trim();
     if (!apiUsername || !apiPassword) {
       return res.status(500).json({ error: 'DataForSEO credentials not configured' });
     }
@@ -69,6 +71,20 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const text = await response.text();
+
+      // 40100 is DataForSEO's auth rejection. Surface something actionable
+      // rather than a raw JSON blob.
+      if (response.status === 401 || text.includes('40100')) {
+        return res.status(401).json({
+          error: 'Search provider rejected the credentials',
+          details:
+            'DataForSEO returned "not authorized". The most common cause is using the ' +
+            'account login password instead of the separate API password shown at ' +
+            'app.dataforseo.com/api-access. Check that DATAFORSEO_API_USERNAME is the ' +
+            'account email and DATAFORSEO_API_PASSWORD is the API password, then redeploy.'
+        });
+      }
+
       return res.status(response.status).json({ error: 'DataForSEO error', details: text });
     }
 

@@ -13,7 +13,9 @@ export default async function handler(req, res) {
   if (!rl.ok) return res.status(429).json({ error: 'Too many requests' });
 
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
+    // Trimmed for the same reason as the DataForSEO credentials: a trailing
+    // newline from a dashboard paste otherwise produces an opaque 401.
+    const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) return res.status(500).json({ error: 'OPENAI_API_KEY not configured' });
 
     // Vercel functions parse JSON into req.body; on some adapters, it’s req.body already
