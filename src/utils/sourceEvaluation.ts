@@ -56,6 +56,12 @@ export interface SourceVerdict {
   status: SourceStatus;
   tier: ReliabilityTier;
   independent: boolean;
+  /**
+   * Whether the source is secondary (WP:PSTS). An interview in a quality paper
+   * is independent but primary — the subject is speaking about themselves — so
+   * it fails notability on a different gate than a press release does.
+   */
+  secondary: boolean;
   coverage: CoverageDepth;
   /** Which signal the coverage judgement rests on. 'url' means it was inferred. */
   coverageBasis: 'headline' | 'url' | 'snippet' | 'none';
@@ -178,10 +184,11 @@ const SPONSORED_MARKERS = [
  * themselves. Useful for facts, useless for notability (WP:PRIMARY, WP:INTERVIEW).
  */
 const INTERVIEW_MARKERS = [
-  'interview with', 'in conversation with', 'q&a with', 'q & a with',
+  'interview', 'interviewed', 'in conversation with', 'q&a', 'q & a',
   ' talks about ', ' tells us ', ' on how i ', 'in his own words',
   'in her own words', 'in their own words', 'ask me anything',
   ' shares his ', ' shares her ', ' shares their ', ' opens up about ',
+  ' sat down with ', ' speaks to ', ' speaks with ', 'oral history',
 ];
 
 /**
@@ -386,6 +393,7 @@ export function evaluateSource(input: SourceInput, subject = ''): SourceVerdict 
       status: 'fails',
       tier: 'unknown',
       independent: false,
+      secondary: true,
       coverage: 'unknown',
       coverageBasis: 'none',
       outletName: null,
@@ -475,12 +483,15 @@ export function evaluateSource(input: SourceInput, subject = ''): SourceVerdict 
 
   // ── Gate 3: secondary vs primary ───────────────────────────────────────────
   const interviewHit = containsAny(editorialText, INTERVIEW_MARKERS);
+  let secondary = true;
   if (interviewHit) {
+    // Note this does NOT clear `independent`: an interview in a quality paper is
+    // still independent of the subject. It fails because it is primary.
+    secondary = false;
     failures.push({
       policy: 'WP:PRIMARY',
-      detail: `This looks like an interview or first-person piece (matched "${interviewHit}"). The subject speaking about themselves is a primary source and does not establish notability.`,
+      detail: `This looks like an interview or first-person piece (matched "${interviewHit}"). The outlet may be impeccable, but the subject speaking about themselves is a primary source — it can verify facts inside an article, and does not help establish that the article should exist.`,
     });
-    independent = false;
   }
 
   // ── Gate 4: significant coverage ───────────────────────────────────────────
@@ -516,7 +527,7 @@ export function evaluateSource(input: SourceInput, subject = ''): SourceVerdict 
 
   // ── Verdict ────────────────────────────────────────────────────────────────
   const reliabilityFails = tier === 'unreliable' || tier === 'deprecated';
-  const hardFail = reliabilityFails || !independent;
+  const hardFail = reliabilityFails || !independent || !secondary;
 
   if (subject && !hardFail) notes.push(coverageNote);
 
@@ -588,6 +599,7 @@ export function evaluateSource(input: SourceInput, subject = ''): SourceVerdict 
     status,
     tier,
     independent,
+    secondary,
     coverage,
     coverageBasis: basis,
     outletName: name,

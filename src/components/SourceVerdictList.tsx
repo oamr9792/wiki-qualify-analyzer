@@ -56,6 +56,11 @@ export function SourceVerdictRow({ verdict }: { verdict: SourceVerdict }) {
                 Not independent
               </span>
             )}
+            {verdict.independent && !verdict.secondary && (
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-800">
+                Primary source
+              </span>
+            )}
           </div>
 
           <a
