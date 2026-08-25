@@ -33,7 +33,7 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
     );
   }
 
-  const { eligible, score, hasExistingWikipedia, existingWikipediaUrl, reasons, suggestedAction, reliableSources, sourcesList, categorizedSources } = result;
+  const { eligible, score, hasExistingWikipedia, existingWikipediaUrl, reasons, suggestedAction, sourcesList, categorized, notability, existence } = result;
   const [showSources, setShowSources] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   
@@ -66,11 +66,14 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
     }
   };
 
-  // Count the ACTUAL highly reliable sources with high relevance
-  const highlyReliableCount = categorizedSources?.highlyReliable?.length || 0;
-  const contextualMentionCount = categorizedSources?.contextualMention?.length || 0;
-  
-  // Handle the case where the topic already has a Wikipedia page
+  // Sources that actually clear all four of Wikipedia's gates.
+  const qualifyingCount = categorized?.qualifying?.length || 0;
+  const supportingCount = categorized?.supporting?.length || 0;
+  const rejectedCount = categorized?.rejected?.length || 0;
+  const qualifyingDomains = notability?.qualifyingDomains || 0;
+
+  // Handle the case where the topic already has a Wikipedia page.
+  // Only a VERIFIED exact-title match from the MediaWiki API reaches this branch.
   if (hasExistingWikipedia && existingWikipediaUrl) {
     return (
       <div className="mb-6">
@@ -81,9 +84,10 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
               <p className="font-medium text-green-800">
                 This topic already has a Wikipedia article
               </p>
-              <a 
-                href={existingWikipediaUrl} 
-                target="_blank" 
+              <p className="text-green-700 text-sm mt-1">{existence?.explanation}</p>
+              <a
+                href={existingWikipediaUrl}
+                target="_blank"
                 rel="noopener noreferrer"
                 className="text-green-700 underline text-sm"
               >
@@ -92,7 +96,7 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
             </div>
           </div>
         </Alert>
-        
+
         {/* New CTA for existing Wikipedia pages */}
         <div className="mt-6 border rounded-md p-4 bg-gray-50">
           <h2 className="text-xl font-medium mb-3">Spotted an issue?</h2>
@@ -126,6 +130,33 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
             <p className="text-sm text-gray-500">For: {query}</p>
           </div>
 
+          {/* A name-match that could not be confirmed as the same subject. */}
+          {existence?.status === 'ambiguous' && (
+            <Alert variant="default" className="bg-amber-50 border-amber-200">
+              <div className="flex items-start">
+                <AlertTriangle className="h-5 w-5 text-amber-600 mr-2 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-amber-800">Possible existing article — needs checking</p>
+                  <p className="text-amber-700 text-sm mt-1">{existence.explanation}</p>
+                  <ul className="mt-2 space-y-1">
+                    {existence.candidates.map((c, i) => (
+                      <li key={i}>
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-amber-800 underline text-sm"
+                        >
+                          {c.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </Alert>
+          )}
+
           <div className="space-y-3">
             {/* Status, Analysis and Score on one line */}
             <div className="flex items-center justify-between border-b pb-2 mb-4">
@@ -152,28 +183,18 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
                 </div>
               </div>
               
-              {/* Middle: Analysis summary with more detailed explanation */}
+              {/* Middle: what the sources actually show */}
               <div className="text-sm text-gray-700 flex-grow px-2">
-                <span className={`font-medium ${eligible ? "text-green-600" : score > 40 ? "text-amber-600" : "text-gray-600"}`}>
-                  {eligible ? "Strong potential. " : 
-                   score > 65 ? "Good potential. " : 
-                   score > 40 ? "Shows potential. " : 
-                   "Limited coverage. "}
-                </span>
-                <span className="text-gray-600">
-                  {/* IMPORTANT: This now uses the ACTUAL count of sources */}
-                  {highlyReliableCount === 0 ? (
-                    "No reliable sources found that specifically mention this topic. Wikipedia requires specific coverage."
-                  ) : highlyReliableCount === 1 ? (
-                    "Found one reliable source specifically mentioning this topic. Wikipedia typically requires at least 3."
-                  ) : highlyReliableCount === 2 ? (
-                    "Found two reliable sources specifically mentioning this topic. Wikipedia typically requires at least 3."
-                  ) : (
-                    `Found ${highlyReliableCount} reliable sources specifically mentioning this topic. This meets Wikipedia's notability guidelines.`
-                  )}
-                </span>
+                <span className="text-gray-700">{notability?.verdict}</span>
+                {rejectedCount > 0 && (
+                  <span className="text-gray-500">
+                    {' '}
+                    {rejectedCount} of {sourcesList.length} sources found were excluded as
+                    non-independent or unreliable.
+                  </span>
+                )}
               </div>
-              
+
               {/* Right: Score - WITH TOOLTIP */}
               <div className="flex flex-col items-center justify-center min-w-[60px] ml-2">
                 <TooltipProvider>
@@ -185,13 +206,19 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
                       </div>
                     </TooltipTrigger>
                     <TooltipContent className="bg-white p-2 shadow-lg rounded-md border max-w-xs">
-                      <p className="text-sm">A score of 70 or higher is typically needed for Wikipedia eligibility. 
-                      Scores of 65-69 are borderline and may require additional sources.</p>
+                      <p className="text-sm">
+                        The score reflects how many independent, reliable sources cover this
+                        subject in depth. Eligibility requires <strong>66+</strong> and qualifying
+                        coverage from at least <strong>three different publishers</strong>.
+                        Currently: {qualifyingCount} qualifying source
+                        {qualifyingCount === 1 ? '' : 's'} across {qualifyingDomains} publisher
+                        {qualifyingDomains === 1 ? '' : 's'}.
+                      </p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
                 <div className="text-xs text-gray-500 mt-1">
-                  {score >= 70 ? "Eligible" : score >= 65 ? "Borderline" : "Not Eligible"}
+                  {eligible ? "Eligible" : score >= 55 ? "Borderline" : "Not Eligible"}
                 </div>
               </div>
             </div>
@@ -279,8 +306,8 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
 
 // Add these two components to export the tab contents separately
 export function SourcesAnalysisTab({ result }: { result: WikipediaEligibilityResult }) {
-  if (!result?.categorizedSources) return null;
-  return <SourcesTab categorizedSources={result.categorizedSources} sourcesList={result.sourcesList} />;
+  if (!result?.categorized) return null;
+  return <SourcesTab categorized={result.categorized} notability={result.notability} />;
 }
 
 export function WikipediaDraftTab({ /* props */ }) {
