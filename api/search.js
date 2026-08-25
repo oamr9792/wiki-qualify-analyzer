@@ -92,6 +92,18 @@ export default async function handler(req, res) {
 
     // DataForSEO reports per-task failures inside a 200 response.
     const task = data?.tasks?.[0];
+
+    // 40102 "No Search Results" is not a failure — it means the query genuinely
+    // has no results in this vertical, which is common for news on an obscure
+    // subject. Normalise it to an empty result set so the analysis continues.
+    const EMPTY_RESULT_CODES = [40102, 40101];
+    if (task && EMPTY_RESULT_CODES.includes(task.status_code)) {
+      return res.status(200).json({
+        ...data,
+        tasks: [{ ...task, status_code: 20000, result: [{ items: [] }] }]
+      });
+    }
+
     if (task && task.status_code && task.status_code !== 20000) {
       return res.status(502).json({
         error: 'DataForSEO task failed',

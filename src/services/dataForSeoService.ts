@@ -70,20 +70,32 @@ export const useDataForSeoSearch = () => {
         post({ keyword: query, depth: 50, se_type: 'news' }),
       ]);
 
-      if (!organicResponse.ok || !newsResponse.ok) {
-        const failed = !organicResponse.ok ? organicResponse : newsResponse;
-        let detail = `HTTP ${failed.status}`;
+      const describeFailure = async (response: Response) => {
         try {
-          const body = await failed.json();
-          if (body?.error) detail = body.details ? `${body.error} — ${body.details}` : body.error;
+          const body = await response.json();
+          if (body?.error) return body.details ? `${body.error} — ${body.details}` : body.error;
         } catch {
-          /* response was not JSON; keep the status code */
+          /* response was not JSON; fall through to the status code */
         }
-        throw new Error(detail);
+        return `HTTP ${response.status}`;
+      };
+
+      // Organic results are essential — without them there is nothing to assess.
+      if (!organicResponse.ok) {
+        throw new Error(await describeFailure(organicResponse));
       }
 
       const organicData = await organicResponse.json();
-      const newsData = await newsResponse.json();
+
+      // News is supplementary. A subject with no news coverage is a normal and
+      // meaningful outcome, so a news failure must not discard a good organic
+      // search — it is recorded as a warning and the analysis proceeds.
+      let newsData: any = {};
+      if (newsResponse.ok) {
+        newsData = await newsResponse.json();
+      } else {
+        console.warn('News search failed; continuing with organic results only:', await describeFailure(newsResponse));
+      }
 
       setRawData({ organic: organicData, news: newsData });
 
