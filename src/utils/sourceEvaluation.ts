@@ -427,7 +427,7 @@ export function evaluateSource(input: SourceInput, subject = ''): SourceVerdict 
     });
   } else if (tier === 'unknown') {
     notes.push(
-      'This domain is not on Wikipedia’s perennial sources list. Editors would judge it case by case — an established outlet with a masthead, named journalists and corrections policy may still qualify.',
+      'This domain is not on Wikipedia’s perennial sources list, so its reliability cannot be confirmed automatically. Open it and check for a masthead, named journalists and a corrections policy. If it is a genuine publication it may qualify; if it is a profile, listing or blog it does not.',
     );
   }
 
@@ -547,6 +547,22 @@ export function evaluateSource(input: SourceInput, subject = ''): SourceVerdict 
         detail: 'Coverage of the subject looks incidental rather than substantial. Wikipedia requires sources that address the subject directly and in detail.',
       });
     }
+  }
+
+  // An unverified domain cannot establish notability. Wikipedia's perennial list
+  // is not exhaustive, so this is not a claim the source is bad — but a strict
+  // reviewer does not accept an unassessed domain as evidence, and in practice
+  // most unknown domains surfacing for a person are profiles, listings and
+  // content farms rather than publications. Downgraded to supporting and
+  // reported under "needs manual review" so a real publication can be promoted
+  // by hand rather than silently credited.
+  if (status === 'counts' && tier === 'unknown') {
+    status = 'partial';
+    failures.push({
+      policy: 'WP:RS',
+      detail:
+        'Reliability of this domain could not be verified — it is not on Wikipedia’s perennial sources list. It is not counted toward notability until you confirm it is an established publication with editorial oversight.',
+    });
   }
 
   // Aggregators and contributor-heavy mastheads republish wire copy under their
@@ -693,14 +709,16 @@ export function assessNotability(verdicts: SourceVerdict[]): NotabilityAssessmen
 
   const eligible = score >= 66 && qualifyingDomains >= 3;
 
-  // Reliable, independent sources we simply could not measure for depth.
-  const needsManualReview = verdicts.filter(
-    v =>
-      v.status === 'partial' &&
-      v.independent &&
-      v.coverage === 'unknown' &&
-      (v.tier === 'tier1' || v.tier === 'reliable'),
-  ).length;
+  // Sources a human could plausibly promote to "counts" after checking them:
+  // either a known-reliable outlet whose depth we could not measure, or an
+  // unassessed domain that otherwise looks like real coverage.
+  const needsManualReview = verdicts.filter(v => {
+    if (v.status !== 'partial' || !v.independent || !v.secondary) return false;
+    const knownOutletUnknownDepth =
+      v.coverage === 'unknown' && (v.tier === 'tier1' || v.tier === 'reliable');
+    const unknownOutletRealCoverage = v.tier === 'unknown' && v.coverage === 'significant';
+    return knownOutletUnknownDepth || unknownOutletRealCoverage;
+  }).length;
 
   let verdict: string;
   if (qualifying.length === 0 && needsManualReview > 0) {

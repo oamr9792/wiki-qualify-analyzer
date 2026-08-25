@@ -59,6 +59,44 @@ export const SELF_PUBLISH_DOMAINS = new Set([
   'tumblr.com', 'livejournal.com', 'hubpages.com', 'ezinearticles.com',
 ]);
 
+// ── CATEGORY 4b: Official registries and structured databases ────────────────
+// Company filings, court records and academic indexes are PRIMARY records
+// (WP:PRIMARY). They verify that something exists; they are not coverage of it
+// and contribute nothing to notability.
+export const REGISTRY_DATABASE_DOMAINS = new Set([
+  'company-information.service.gov.uk', 'find-and-update.company-information.service.gov.uk',
+  'companieshouse.gov.uk', 'gov.uk', 'sec.gov', 'edgar.sec.gov',
+  'opencorporates.com', 'bizapedia.com', 'corporationwiki.com',
+  'sam.gov', 'usaspending.gov', 'legislation.gov.uk',
+  'scholar.google.com', 'researchgate.net', 'academia.edu', 'orcid.org',
+  'semanticscholar.org', 'publons.com', 'ssrn.com', 'lens.org',
+  'patents.google.com', 'justia.com', 'trademarks.justia.com',
+  'zoominfo.com', 'leadiq.com', 'lusha.com', 'contactout.com',
+  'wikidata.org', 'wikitree.com', 'geni.com', 'ancestry.com',
+]);
+
+// ── CATEGORY 4c: Profile, listing and expert-quote platforms ─────────────────
+// Entries are created or submitted by the subject. Common in reputation work
+// and frequently mistaken for editorial coverage.
+export const PROFILE_PLATFORM_DOMAINS = new Set([
+  'intch.org', 'featured.com', 'qwoted.com', 'terkel.io', 'helpareporter.com',
+  'sourcebottle.com', 'expertfile.com', 'muckrack.com', 'clarity.fm',
+  'about.me', 'linktr.ee', 'carrd.co', 'behance.net', 'dribbble.com',
+  'angel.co', 'wellfound.com', 'f6s.com', 'startupranking.com',
+  'speakerhub.com', 'sessionize.com', 'meetup.com', 'eventbrite.com',
+  'slideshare.net', 'issuu.com', 'calendly.com', 'trustpilot.com',
+  'goodreads.com', 'amazon.com', 'audible.com', 'apple.com',
+]);
+
+// URL shapes that indicate a per-person profile page rather than an article.
+const PROFILE_URL_PATTERNS: string[] = [
+  '/officers/', '/officer/', '/citations?user=', '/citations?hl',
+  '/profile/', '/profiles/', '/author/', '/authors/', '/people/',
+  '/member/', '/members/', '/user/', '/users/', '/u/', '/in/',
+  '/speaker/', '/speakers/', '/expert/', '/experts/', '/contributor/',
+  '/team/', '/our-team/', '/staff/', '/directory/', '/listing/',
+];
+
 // ── CATEGORY 5: Press-release aggregators / content farms ────────────────────
 // Republish press releases verbatim or produce low-standards SEO content.
 export const CONTENT_FARM_DOMAINS = new Set([
@@ -95,7 +133,8 @@ export interface PressReleaseDetectionResult {
   isPressRelease: boolean;
   reason: string | null;
   /** Fine-grained category so the UI can display the right badge text */
-  category: 'wire_service' | 'directory' | 'social_media' | 'self_publish' | 'content_farm' | 'pr_path' | 'independent' | null;
+  category: 'wire_service' | 'directory' | 'social_media' | 'self_publish' | 'content_farm'
+    | 'pr_path' | 'registry' | 'profile_platform' | 'profile_page' | 'independent' | null;
 }
 
 export function detectPressReleaseOrSelfPromo(
@@ -127,6 +166,31 @@ export function detectPressReleaseOrSelfPromo(
   if (matchesDomainSet(CONTENT_FARM_DOMAINS)) {
     return { isPressRelease: true, reason: 'Site primarily republishes press releases without editorial oversight.', category: 'content_farm' };
   }
+  if (matchesDomainSet(REGISTRY_DATABASE_DOMAINS)) {
+    return {
+      isPressRelease: true,
+      reason: 'Official registry or structured database. It records that the subject exists — it is a primary record, not coverage of them (WP:PRIMARY).',
+      category: 'registry',
+    };
+  }
+  if (matchesDomainSet(PROFILE_PLATFORM_DOMAINS)) {
+    return {
+      isPressRelease: true,
+      reason: 'Profile or listing platform where entries are created or submitted by the subject. Not independent editorial coverage.',
+      category: 'profile_platform',
+    };
+  }
+
+  // A per-person profile URL on any domain is a listing, not an article.
+  for (const pattern of PROFILE_URL_PATTERNS) {
+    if (lowerUrl.includes(pattern)) {
+      return {
+        isPressRelease: true,
+        reason: `URL path contains "${pattern}", indicating a profile or directory entry rather than a piece of journalism about the subject.`,
+        category: 'profile_page',
+      };
+    }
+  }
 
   // Path-pattern check — only for non-exempt domains
   const isExempt = [...EDITORIAL_DOMAINS_EXEMPT_FROM_PATH_CHECK].some(
@@ -155,6 +219,9 @@ export function getPressReleaseLabel(category: PressReleaseDetectionResult['cate
     case 'self_publish':  return 'Self-published — no editorial oversight';
     case 'content_farm':  return 'PR aggregator — not original journalism';
     case 'pr_path':       return 'Press release section — not editorial';
+    case 'registry':      return 'Official registry — primary record, not coverage';
+    case 'profile_platform': return 'Profile platform — self-submitted listing';
+    case 'profile_page':  return 'Profile or directory page — not an article';
     default:              return '';
   }
 }

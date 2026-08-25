@@ -205,6 +205,60 @@ async function main() {
   const badUrl = evaluateSource({ url: 'not a url at all' }, 'Jane Doe');
   check('garbage input is rejected', badUrl.status === 'fails' && badUrl.headline === 'Not a valid URL', badUrl.headline);
 
+  section('4b. Registries, profiles and unassessed domains must not count');
+
+  // These five were wrongly approved for "orani amroussi" on the live site.
+  const wronglyApproved: Array<[string, string]> = [
+    ['https://intch.org/16066718', 'networking profile platform'],
+    ['https://find-and-update.company-information.service.gov.uk/officers/sfqbv2V3Zrha/appointments', 'Companies House registry'],
+    ['https://scholar.google.com/citations?user=2Ull43oAAAAJ&hl=en', 'Google Scholar profile'],
+    ['https://featured.com/p/orani-amroussi', 'expert-quote platform'],
+    ['https://www.crunchbase.com/person/orani-amroussi', 'business directory'],
+  ];
+
+  wronglyApproved.forEach(([url, label]) => {
+    const v = evaluateSource({ url, title: 'Orani Amroussi' }, 'Orani Amroussi');
+    check(
+      `${label} does not count`,
+      v.status !== 'counts',
+      `${v.status} | ${v.failures.map(f => f.policy).join(',') || 'no failures'} | ${url}`,
+    );
+  });
+
+  const wholeSet = assessNotability(
+    wronglyApproved.map(([url]) => evaluateSource({ url, title: 'Orani Amroussi' }, 'Orani Amroussi')),
+  );
+  check(
+    'the full set that was wrongly approved is now NOT eligible',
+    !wholeSet.eligible && wholeSet.qualifyingCount === 0,
+    `score=${wholeSet.score} qualifying=${wholeSet.qualifyingCount} eligible=${wholeSet.eligible}`,
+  );
+
+  const unknownButPlausible = evaluateSource(
+    { url: 'https://www.someregionalpaper.co.uk/news/jane-doe-the-rise-of-a-founder' },
+    'Jane Doe',
+  );
+  check(
+    'an unassessed domain is supporting, not counting',
+    unknownButPlausible.status === 'partial',
+    unknownButPlausible.status,
+  );
+  check(
+    '…and is flagged for manual review rather than dismissed',
+    assessNotability([unknownButPlausible]).needsManualReview === 1,
+    String(assessNotability([unknownButPlausible]).needsManualReview),
+  );
+
+  const knownGoodStillCounts = evaluateSource(
+    { url: 'https://www.bbc.co.uk/news/uk-jane-doe-profile', title: 'Jane Doe: a profile' },
+    'Jane Doe',
+  );
+  check(
+    'a known-reliable outlet still counts (no over-correction)',
+    knownGoodStillCounts.status === 'counts',
+    knownGoodStillCounts.headline,
+  );
+
   section('5. URL-only checking (the Source Checker path)');
 
   const urlOnlyReuters = evaluateSource(
