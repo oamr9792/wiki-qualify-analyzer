@@ -5,10 +5,14 @@ import { Analytics } from "@vercel/analytics/react";
 import './App.css';
 import Index from './pages/Index';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { useEmbedAutoHeight } from '@/hooks/useEmbedAutoHeight';
 
 const queryClient = new QueryClient();
 
 function App() {
+  // Lets the host page size the iframe to the content when embedded.
+  useEmbedAutoHeight();
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme="reputationCitadel">
