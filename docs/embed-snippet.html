@@ -1,0 +1,90 @@
+<!--
+  WikiApproved — Wikipedia Eligibility Analyser
+  Embed for wikiapproved.reputationcitadel.com
+
+  Paste this into a WordPress "Custom HTML" block on the page that should host
+  the tool. Full width, centred, and it resizes itself to fit its contents.
+
+  The app posts its height to this page as it grows, and the script below
+  resizes the iframe to match. Without that, a fixed height either cuts the
+  results off or leaves a slab of blank space under the search box.
+
+  If your setup strips <script> from Custom HTML blocks, the iframe still works
+  on its own — it just falls back to the fixed 1000px height and scrolls
+  internally. See "Fallback" at the bottom.
+-->
+
+<div class="wikiapproved-embed">
+  <iframe
+    id="wikiapproved-tool"
+    src="https://wiki-eligibility.vercel.app/"
+    title="WikiApproved – Wikipedia Eligibility Analyser"
+    loading="lazy"
+    referrerpolicy="strict-origin-when-cross-origin"
+  ></iframe>
+</div>
+
+<style>
+  .wikiapproved-embed {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  .wikiapproved-embed > iframe {
+    width: 100%;
+    /* Starting height. The script below replaces this with the real content
+       height as soon as the app reports it. */
+    height: 1000px;
+    border: 0;
+    display: block;
+    background: transparent;
+  }
+
+  /* On small screens give it a sensible minimum so the form is never cramped. */
+  @media (max-width: 640px) {
+    .wikiapproved-embed > iframe { height: 1200px; }
+  }
+</style>
+
+<script>
+(function () {
+  var frame = document.getElementById('wikiapproved-tool');
+  if (!frame) return;
+
+  // Only accept height messages from the tool's own origin.
+  var ALLOWED_ORIGIN = /^https:\/\/wiki-eligibility[a-z0-9-]*\.vercel\.app$/;
+
+  window.addEventListener('message', function (event) {
+    if (!ALLOWED_ORIGIN.test(event.origin)) return;
+
+    var data = event.data;
+    if (!data || data.type !== 'wikiapproved:height') return;
+
+    var height = Number(data.height);
+    if (!isFinite(height)) return;
+
+    // Clamped: never smaller than the search form, never absurdly tall.
+    height = Math.max(600, Math.min(height, 20000));
+    frame.style.height = height + 'px';
+  });
+})();
+</script>
+
+
+<!--
+  ─────────────────────────────────────────────────────────────────────────────
+  FALLBACK — use this instead if scripts are stripped on your page.
+  Fixed height, scrolls internally.
+
+  <div style="width:100%;display:flex;justify-content:center;">
+    <iframe
+      src="https://wiki-eligibility.vercel.app/"
+      title="WikiApproved – Wikipedia Eligibility Analyser"
+      style="width:100%;height:1200px;border:0;display:block;"
+    ></iframe>
+  </div>
+  ─────────────────────────────────────────────────────────────────────────────
+-->

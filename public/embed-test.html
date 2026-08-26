@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Embed test — WikiApproved</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f6f6f8; }
+    .bar { padding: 10px 16px; background: #17163e; color: #fff; font-size: 14px; }
+    .bar code { background: rgba(255,255,255,.15); padding: 1px 5px; border-radius: 3px; }
+    .wikiapproved-embed { width: 100%; display: flex; justify-content: center; margin: 0 auto; }
+    .wikiapproved-embed > iframe { width: 100%; height: 1000px; border: 0; display: block; background: #fff; }
+    .foot { padding: 24px 16px; text-align: center; color: #666; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <!--
+    Diagnostic harness for the iframe embed. Served from the app's own origin,
+    which frame-ancestors permits via 'self', so it exercises the real
+    postMessage auto-height path end to end. Safe to delete.
+  -->
+  <div class="bar" id="status">waiting for the first height message…</div>
+
+  <div class="wikiapproved-embed">
+    <iframe
+      id="wikiapproved-tool"
+      src="/"
+      title="WikiApproved – Wikipedia Eligibility Analyser"
+      referrerpolicy="strict-origin-when-cross-origin"
+    ></iframe>
+  </div>
+
+  <div class="foot">
+    If the height above updates as you search, the embed is working. This page is
+    a diagnostic only — the real snippet lives in <code>docs/embed-snippet.html</code>.
+  </div>
+
+  <script>
+    (function () {
+      var frame = document.getElementById('wikiapproved-tool');
+      var status = document.getElementById('status');
+      var count = 0;
+
+      // Same-origin here, so accept messages from this origin.
+      window.addEventListener('message', function (event) {
+        if (event.origin !== window.location.origin) return;
+
+        var data = event.data;
+        if (!data || data.type !== 'wikiapproved:height') return;
+
+        var height = Number(data.height);
+        if (!isFinite(height)) return;
+
+        height = Math.max(600, Math.min(height, 20000));
+        frame.style.height = height + 'px';
+
+        count++;
+        status.textContent =
+          'auto-height WORKING — iframe resized to ' + height + 'px (' + count + ' message' +
+          (count === 1 ? '' : 's') + ' received)';
+        window.__lastHeight = height;
+        window.__messageCount = count;
+      });
+    })();
+  </script>
+</body>
+</html>
