@@ -259,6 +259,65 @@ async function main() {
     knownGoodStillCounts.headline,
   );
 
+  section('4c. Author profiles and op-eds on reputable mastheads');
+
+  // Both were wrongly counted for "shlomo wiesen" on the live site.
+  const authorIndex = evaluateSource(
+    { url: 'https://www.timesofisrael.com/writers/shlomo-wiesen/', title: 'Shlomo Wiesen' },
+    'Shlomo Wiesen',
+  );
+  check(
+    'author index page on a reliable outlet does not count',
+    authorIndex.status === 'fails',
+    `${authorIndex.status} | ${authorIndex.failures.map(f => f.policy).join(',')}`,
+  );
+
+  const toiBlog = evaluateSource(
+    { url: 'https://blogs.timesofisrael.com/rice-for-vp-is-a-ruse/', title: 'Rice for VP is a ruse' },
+    'Shlomo Wiesen',
+  );
+  check(
+    'blogs. subdomain of a reliable outlet does not count',
+    toiBlog.status === 'fails' && toiBlog.failures.some(f => f.policy === 'WP:SELFPUB'),
+    `${toiBlog.status} | ${toiBlog.failures.map(f => f.policy).join(',')}`,
+  );
+  check(
+    '…and does not inherit the parent paper’s reliability rating',
+    toiBlog.tier !== 'reliable' && toiBlog.tier !== 'tier1',
+    `tier=${toiBlog.tier}`,
+  );
+
+  const opEd = evaluateSource(
+    { url: 'https://www.theguardian.com/commentisfree/2024/jan/01/jane-doe-on-tech', title: 'Jane Doe: why tech is broken' },
+    'Jane Doe',
+  );
+  check(
+    'op-ed section piece does not count',
+    opEd.status !== 'counts',
+    `${opEd.status} | ${opEd.failures.map(f => f.policy).join(',')}`,
+  );
+
+  const opinionPath = evaluateSource(
+    { url: 'https://www.nytimes.com/2024/03/01/opinion/jane-doe-argument.html', title: 'Jane Doe makes her case' },
+    'Jane Doe',
+  );
+  check(
+    'NYT opinion section does not count',
+    opinionPath.status !== 'counts',
+    `${opinionPath.status} | ${opinionPath.failures.map(f => f.policy).join(',')}`,
+  );
+
+  // Guard against over-correction: the main newsroom must still count.
+  const toiNews = evaluateSource(
+    { url: 'https://www.timesofisrael.com/israeli-startup-founder-jane-doe-profiled/', title: 'Israeli startup founder Jane Doe profiled' },
+    'Jane Doe',
+  );
+  check(
+    'the parent outlet’s actual reporting still counts',
+    toiNews.status === 'counts',
+    `${toiNews.status} | ${toiNews.failures.map(f => f.policy).join(',')}`,
+  );
+
   section('5. URL-only checking (the Source Checker path)');
 
   const urlOnlyReuters = evaluateSource(

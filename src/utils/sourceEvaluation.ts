@@ -22,6 +22,7 @@ import { getEffectiveDomain } from './domainUtils';
 import { wikipediaSourceReliability } from './wikipediaSourceReliability';
 import {
   detectPressReleaseOrSelfPromo,
+  detectSelfPublishedOrOpinion,
   getPressReleaseLabel,
 } from './pressReleaseDetector';
 
@@ -217,7 +218,14 @@ const LISTICLE_MARKERS = [
  * `getEffectiveDomain` never throws — on unparseable input it returns the input
  * unchanged — so validate the URL shape ourselves before trusting it.
  */
-function parseDomain(rawUrl: string): string | null {
+/**
+ * Returns both the full hostname and the normalised domain.
+ *
+ * Both are needed: reliability is looked up by normalised domain, but
+ * self-published subdomains are only visible in the full hostname —
+ * normalisation collapses `blogs.timesofisrael.com` to `timesofisrael.com`.
+ */
+function parseHost(rawUrl: string): { hostname: string; domain: string } | null {
   if (!rawUrl) return null;
   const withScheme = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
 
@@ -232,7 +240,10 @@ function parseDomain(rawUrl: string): string | null {
   if (!hostname || /\s/.test(hostname)) return null;
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(hostname)) return null;
 
-  return getEffectiveDomain(withScheme).replace(/^www\./, '').toLowerCase();
+  return {
+    hostname: hostname.toLowerCase(),
+    domain: getEffectiveDomain(withScheme).replace(/^www\./, '').toLowerCase(),
+  };
 }
 
 function containsAny(haystack: string, needles: string[]): string | null {
@@ -385,7 +396,9 @@ export function evaluateSource(input: SourceInput, subject = ''): SourceVerdict 
   const notes: string[] = [];
 
   // ── Parse the URL ──────────────────────────────────────────────────────────
-  const domain = parseDomain(rawUrl);
+  const parsed = parseHost(rawUrl);
+  const domain = parsed?.domain ?? null;
+  const hostname = parsed?.hostname ?? '';
   if (!domain) {
     return {
       url: rawUrl,
@@ -434,6 +447,26 @@ export function evaluateSource(input: SourceInput, subject = ''): SourceVerdict 
   // ── Gate 2: independence ───────────────────────────────────────────────────
   const prCheck = detectPressReleaseOrSelfPromo(rawUrl, domain);
   let independent = true;
+  // Declared here rather than at Gate 3 because the opinion-section check below
+  // needs to clear it.
+  let secondary = true;
+
+  // Self-published subdomains and opinion sections. Checked before anything
+  // else that trusts `tier`, because a reputable masthead's blog platform
+  // inherits its reliability rating through domain normalisation and would
+  // otherwise be credited as if it were the paper's own reporting.
+  const spCheck = detectSelfPublishedOrOpinion(rawUrl, hostname);
+  if (spCheck.matched) {
+    independent = false;
+    if (spCheck.kind === 'self_published_subdomain') {
+      // Downgrade the tier too: this is not the parent outlet's journalism.
+      tier = 'unknown';
+      failures.push({ policy: 'WP:SELFPUB', detail: spCheck.reason! });
+    } else {
+      secondary = false;
+      failures.push({ policy: 'WP:RSOPINION', detail: spCheck.reason! });
+    }
+  }
 
   if (prCheck.isPressRelease) {
     independent = false;
@@ -483,7 +516,6 @@ export function evaluateSource(input: SourceInput, subject = ''): SourceVerdict 
 
   // ── Gate 3: secondary vs primary ───────────────────────────────────────────
   const interviewHit = containsAny(editorialText, INTERVIEW_MARKERS);
-  let secondary = true;
   if (interviewHit) {
     // Note this does NOT clear `independent`: an interview in a quality paper is
     // still independent of the subject. It fails because it is primary.

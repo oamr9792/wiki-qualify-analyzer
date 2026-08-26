@@ -89,13 +89,95 @@ export const PROFILE_PLATFORM_DOMAINS = new Set([
 ]);
 
 // URL shapes that indicate a per-person profile page rather than an article.
+// An author/contributor index lists someone's output — it is not coverage OF
+// them, and it is published by an outlet they write for, so it is not
+// independent either.
 const PROFILE_URL_PATTERNS: string[] = [
   '/officers/', '/officer/', '/citations?user=', '/citations?hl',
   '/profile/', '/profiles/', '/author/', '/authors/', '/people/',
+  '/writer/', '/writers/', '/columnist/', '/columnists/',
+  '/correspondent/', '/correspondents/', '/reporter/', '/reporters/',
+  '/journalist/', '/journalists/', '/byline/', '/bylines/',
   '/member/', '/members/', '/user/', '/users/', '/u/', '/in/',
   '/speaker/', '/speakers/', '/expert/', '/experts/', '/contributor/',
   '/team/', '/our-team/', '/staff/', '/directory/', '/listing/',
 ];
+
+/**
+ * Subdomains that host self-published or opinion content under an otherwise
+ * reputable masthead. `blogs.timesofisrael.com` accepts posts from anyone who
+ * registers; it carries none of the paper's editorial vetting (WP:SELFPUB).
+ *
+ * These must be matched against the FULL hostname — domain normalisation
+ * collapses `blogs.timesofisrael.com` to `timesofisrael.com`, which would
+ * otherwise inherit the main paper's "generally reliable" rating.
+ */
+const SELF_PUBLISHED_SUBDOMAINS = [
+  'blogs.', 'blog.', 'opinion.', 'opinions.', 'voices.', 'community.',
+  'medium.', 'substack.', 'forums.', 'forum.', 'wiki.', 'user.', 'users.',
+];
+
+/**
+ * Sections that carry opinion rather than reporting. Opinion pieces are primary
+ * sources for the author's views (WP:RSOPINION) and, when written by the
+ * subject, are not independent at all.
+ */
+const OPINION_PATH_PATTERNS: string[] = [
+  '/opinion/', '/opinions/', '/op-ed/', '/op-eds/', '/oped/',
+  '/commentary/', '/comment/', '/editorial/', '/editorials/',
+  '/voices/', '/viewpoint/', '/viewpoints/', '/perspective/',
+  '/letters/', '/letter-to-the-editor', '/column/', '/columns/',
+  // Outlet-specific opinion sections whose names do not contain the word
+  // "opinion". The Guardian's is /commentisfree/, which "/comment/" misses
+  // because there is no slash after "comment".
+  '/commentisfree', '/comment-is-free', '/thought-leadership',
+  '/analysis-and-opinion', '/blogs/', '/blog/',
+];
+
+export interface SelfPublishedCheck {
+  matched: boolean;
+  reason: string | null;
+  kind: 'self_published_subdomain' | 'opinion_section' | null;
+}
+
+/**
+ * Detects self-published subdomains and opinion sections.
+ *
+ * Takes the FULL hostname, not the normalised domain, because the distinction
+ * being made here lives entirely in the subdomain.
+ */
+export function detectSelfPublishedOrOpinion(url: string, hostname: string): SelfPublishedCheck {
+  const host = hostname.toLowerCase().replace(/^www\./, '');
+  const lowerUrl = url.toLowerCase();
+
+  for (const prefix of SELF_PUBLISHED_SUBDOMAINS) {
+    if (host.startsWith(prefix)) {
+      return {
+        matched: true,
+        reason:
+          `Hosted on the "${prefix.replace('.', '')}" subdomain (${hostname}), which carries self-published ` +
+          `content rather than the outlet's edited journalism. Wikipedia treats these as self-published ` +
+          `regardless of the parent publication's reputation (WP:SELFPUB).`,
+        kind: 'self_published_subdomain',
+      };
+    }
+  }
+
+  for (const pattern of OPINION_PATH_PATTERNS) {
+    if (lowerUrl.includes(pattern)) {
+      return {
+        matched: true,
+        reason:
+          `Published in an opinion section (URL contains "${pattern}"). Opinion pieces are primary sources ` +
+          `for the author's views, not independent reporting about the subject (WP:RSOPINION). If the ` +
+          `subject wrote it, it is not independent at all.`,
+        kind: 'opinion_section',
+      };
+    }
+  }
+
+  return { matched: false, reason: null, kind: null };
+}
 
 // ── CATEGORY 5: Press-release aggregators / content farms ────────────────────
 // Republish press releases verbatim or produce low-standards SEO content.
