@@ -10,7 +10,11 @@
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "X-Frame-Options", "value": "DENY" },
+        {
+          "//": "wikiapproved.com embeds this app in an iframe. X-Frame-Options: DENY blocked that outright, and it cannot allow specific origins (ALLOW-FROM is unsupported in every modern browser), so frame-ancestors replaces it. Clickjacking protection is retained: only these origins may frame the app.",
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self' https://wikiapproved.com https://www.wikiapproved.com"
+        },
         { "key": "Permissions-Policy", "value": "geolocation=(), microphone=(), camera=()" }
       ]
     }
