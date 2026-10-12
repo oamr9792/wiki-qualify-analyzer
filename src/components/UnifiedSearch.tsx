@@ -200,7 +200,7 @@ export function UnifiedSearch() {
   useEffect(() => {
     if (isLoading || results.length === 0 || !searchedQuery) return;
 
-    let cancelled = false;
+    let canceled = false;
 
     const run = async () => {
       const contextTerms = [modifierKeyword1, modifierKeyword2]
@@ -214,7 +214,7 @@ export function UnifiedSearch() {
         console.error('Existence check failed; scoring sources only.', err);
       }
 
-      if (cancelled) return;
+      if (canceled) return;
 
       setEligibilityResult(
         assessWikipediaEligibility(searchedQuery, results, newsResults, existence),
@@ -222,7 +222,7 @@ export function UnifiedSearch() {
     };
 
     run();
-    return () => { cancelled = true; };
+    return () => { canceled = true; };
     // modifierKeyword1/2 are intentionally excluded: the assessment should
     // reflect the query as it was searched, not later edits to the input boxes.
     // eslint-disable-next-line react-hooks/exhaustive-deps

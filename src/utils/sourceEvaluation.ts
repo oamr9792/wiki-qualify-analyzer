@@ -14,7 +14,7 @@
  * how prestigious the masthead. A press release in Reuters is still a press
  * release; a Forbes Council post is still self-published marketing.
  *
- * This module is shared by the entity analyser and the standalone source checker
+ * This module is shared by the entity analyzer and the standalone source checker
  * so both give identical verdicts.
  */
 
@@ -109,7 +109,7 @@ const TIER_1_DOMAINS = new Set([
  */
 const MIXED_EDITORIAL_DOMAINS = new Set([
   'forbes.com',        // WP:FORBESCON — contributor posts are self-published
-  'entrepreneur.com',  // large syndicated/contributor programme
+  'entrepreneur.com',  // large syndicated/contributor program
   'inc.com',
   'fastcompany.com',
   'yahoo.com',         // syndicates wire copy verbatim
@@ -134,7 +134,7 @@ function toTier(reliabilityLabel: string, inList: boolean, domain: string): Reli
   }
 }
 
-/** Looks the domain up on the perennial-sources map, honouring subdomains. */
+/** Looks the domain up on the perennial-sources map, honoring subdomains. */
 function lookupReliability(domain: string): { label: string; inList: boolean; name: string | null } {
   for (const key of Object.keys(wikipediaSourceReliability)) {
     if (domain === key || domain.endsWith(`.${key}`)) {
@@ -202,8 +202,8 @@ const ROUTINE_ANNOUNCEMENT_MARKERS = [
   'raises $', 'raises £', 'secures funding', 'closes round', 'series a',
   'series b', 'series c', 'funding round', 'acquires', 'acquisition of',
   'merger with', 'partners with', 'partnership with', 'expands to',
-  'opens new', 'wins award', 'named to', 'recognized as', 'recognised as',
-  'honored as', 'honoured as', 'ranked among', 'makes the list',
+  'opens new', 'wins award', 'named to', 'recognized as', 'recognized as',
+  'honored as', 'honored as', 'ranked among', 'makes the list',
   'celebrates', 'anniversary', 'earnings', 'quarterly results',
 ];
 

@@ -5,7 +5,7 @@ import { SourceVerdict, ReliabilityTier } from '@/utils/sourceEvaluation';
 /**
  * Renders per-source verdicts with the policy reasoning attached.
  *
- * Shared by the entity analyser's Sources tab and the standalone source checker
+ * Shared by the entity analyzer's Sources tab and the standalone source checker
  * so both present identical judgements.
  */
 

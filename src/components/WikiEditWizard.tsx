@@ -81,7 +81,7 @@ async function fetchWikipediaText(pageUrl: string): Promise<{ text: string; titl
  * Normalises whitespace, strips basic wikitext markup for comparison.
  */
 function findPassageInWikitext(passage: string, wikitext: string): boolean {
-  const normalise = (s: string) =>
+  const normalize = (s: string) =>
     s
       .replace(/\[\[([^\]|]+\|)?([^\]]+)\]\]/g, '$2') // [[link|label]] → label
       .replace(/<ref[^>]*>[\s\S]*?<\/ref>/gi, '')       // strip <ref>
@@ -90,9 +90,9 @@ function findPassageInWikitext(passage: string, wikitext: string): boolean {
       .replace(/\s+/g, ' ')
       .trim()
       .toLowerCase();
-  const haystack = normalise(wikitext);
+  const haystack = normalize(wikitext);
   // Try progressively shorter prefixes of the passage to handle partial matches
-  const needle = normalise(passage);
+  const needle = normalize(passage);
   if (!needle || needle.length < 15) return true; // too short to meaningfully check
   // Check if at least 70% of the passage words appear in the wikitext near each other
   const words = needle.split(' ').filter(w => w.length > 3);

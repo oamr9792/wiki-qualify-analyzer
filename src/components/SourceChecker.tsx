@@ -14,7 +14,7 @@ import { SourceVerdictList } from '@/components/SourceVerdictList';
  * Paste a list of URLs and get a per-source verdict against Wikipedia's sourcing
  * policy, plus a roll-up saying whether the set as a whole would satisfy WP:GNG.
  *
- * Uses the same `evaluateSource` engine as the entity analyser, so a source that
+ * Uses the same `evaluateSource` engine as the entity analyzer, so a source that
  * is rejected here is rejected there too.
  */
 

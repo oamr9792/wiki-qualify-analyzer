@@ -435,7 +435,7 @@ export function DraftFormatter() {
     // Score the draft and compute highlighted rendering
     const score = scoreDraft(rawText, refResults);
 
-    // Build highlighted wikitext: split into lines, colour flagged sentences red
+    // Build highlighted wikitext: split into lines, color flagged sentences red
     const rawSentences = rawText.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const wtLines = wt.split('\n');
     const highlighted: React.ReactNode[] = wtLines.map((line, li) => {
