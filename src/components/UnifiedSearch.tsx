@@ -604,9 +604,30 @@ export function UnifiedSearch() {
             <TabsList className="w-full mb-2 justify-start overflow-x-auto flex-nowrap">
               <TabsTrigger value="eligibility" className="whitespace-nowrap">Eligibility</TabsTrigger>
               <TabsTrigger value="sources" className="whitespace-nowrap">Sources</TabsTrigger>
-              <TabsTrigger value="draft" className="whitespace-nowrap">Wikipedia Draft</TabsTrigger>
-              <TabsTrigger value="formatter" className="whitespace-nowrap">Draft Formatter</TabsTrigger>
-              <TabsTrigger value="edit-wizard" className="whitespace-nowrap">Edit Wizard</TabsTrigger>
+              <TabsTrigger
+                value="draft"
+                disabled={!eligibilityResult?.eligible}
+                className="whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+                title={!eligibilityResult?.eligible ? 'Only available when the subject is eligible for a Wikipedia page' : undefined}
+              >
+                Wikipedia Draft
+              </TabsTrigger>
+              <TabsTrigger
+                value="formatter"
+                disabled={!eligibilityResult?.eligible}
+                className="whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+                title={!eligibilityResult?.eligible ? 'Only available when the subject is eligible for a Wikipedia page' : undefined}
+              >
+                Draft Formatter
+              </TabsTrigger>
+              <TabsTrigger
+                value="edit-wizard"
+                disabled={!eligibilityResult?.hasExistingWikipedia}
+                className="whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+                title={!eligibilityResult?.hasExistingWikipedia ? 'Only available when a Wikipedia page already exists for this subject' : undefined}
+              >
+                Edit Wizard
+              </TabsTrigger>
             </TabsList>
             
             <div className="p-0">
