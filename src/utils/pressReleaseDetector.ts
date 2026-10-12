@@ -59,6 +59,13 @@ export const SELF_PUBLISH_DOMAINS = new Set([
   'tumblr.com', 'livejournal.com', 'hubpages.com', 'ezinearticles.com',
 ]);
 
+// ── CATEGORY 4a: Personal / subject-owned websites ───────────────────────────
+// When the URL domain IS the subject being written about, the source is
+// self-promotional by definition — the subject controls the content (WP:SELFPUB).
+// This is detected dynamically in detectPressReleaseOrSelfPromo() by comparing
+// the article's subject name against the domain; the sets below handle the few
+// edge cases that need hard-coded rules.
+
 // ── CATEGORY 4b: Official registries and structured databases ────────────────
 // Company filings, court records and academic indexes are PRIMARY records
 // (WP:PRIMARY). They verify that something exists; they are not coverage of it
@@ -219,12 +226,51 @@ export interface PressReleaseDetectionResult {
     | 'pr_path' | 'registry' | 'profile_platform' | 'profile_page' | 'independent' | null;
 }
 
+/**
+ * Strips a full domain down to its "slug" for subject-matching:
+ * "murrygunty.com" → "murrygunty", "blackbearsportsgroup.com" → "blackbearsportsgroup"
+ */
+function domainSlug(domain: string): string {
+  return domain.toLowerCase()
+    .replace(/^www\./, '')
+    .replace(/\.[^.]+$/, '')   // strip TLD
+    .replace(/[-_.\s]/g, '');  // strip separators
+}
+
+/**
+ * Returns true when the domain appears to belong to the subject itself —
+ * i.e. the subject's name (normalised) appears inside the domain slug.
+ * e.g. subject="Murry Gunty", domain="murrygunty.com" → true.
+ */
+function isDomainOwnedBySubject(domain: string, subjectName: string): boolean {
+  if (!subjectName) return false;
+  const slug = domainSlug(domain);
+  // Normalise subject: remove spaces, punctuation, lowercase
+  const subjectSlug = subjectName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (subjectSlug.length < 4) return false; // too short to be meaningful
+  // Domain slug contains the subject slug, or vice-versa (handles abbreviations)
+  return slug.includes(subjectSlug) || subjectSlug.includes(slug);
+}
+
 export function detectPressReleaseOrSelfPromo(
   url: string,
   domain: string,
+  subjectName?: string,
 ): PressReleaseDetectionResult {
   const lowerUrl = url.toLowerCase();
   const normDomain = domain.toLowerCase().replace(/^www\./, '').replace(/:\d+$/, '');
+
+  // ── Personal / subject-owned website check ────────────────────────────────
+  // Must run BEFORE the generic category checks so that e.g. a subject's own
+  // Medium account doesn't get a generic "self-publish platform" reason when we
+  // can give the more accurate "subject's own website" reason.
+  if (subjectName && isDomainOwnedBySubject(normDomain, subjectName)) {
+    return {
+      isPressRelease: true,
+      reason: `This appears to be the subject's own website (${normDomain}). Content controlled by the subject cannot establish Wikipedia notability — Wikipedia requires coverage by independent, third-party sources (WP:SELFPUB, WP:IND).`,
+      category: 'self_publish',
+    };
+  }
 
   const matchesDomainSet = (set: Set<string>): boolean => {
     for (const d of set) {

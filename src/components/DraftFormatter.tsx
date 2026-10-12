@@ -65,6 +65,52 @@ function makeRefName(url: string, index: number, used: Set<string>): string {
 }
 
 /**
+ * Best-effort extraction of the article subject from the first sentence.
+ * We look for the first run of Title-Cased Words at the start of the text
+ * (after stripping leading HTML tags/whitespace). This handles the common
+ * Wikipedia article opening: "Jane Smith is an American entrepreneur..."
+ */
+function guessSubjectName(text: string): string {
+  // Strip leading HTML tags that may come from Google Docs paste
+  const stripped = text.replace(/^(<[^>]+>\s*)+/, '').trim();
+  // Match a leading sequence of capitalised words (the subject's name)
+  const m = stripped.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,4})/);
+  return m ? m[1].trim() : '';
+}
+
+/**
+ * Convert HTML heading tags (from Google Docs pastes) to wikitext headings.
+ * <h1>Foo</h1> → = Foo =
+ * <h2>Foo</h2> → == Foo ==
+ * <h3>Foo</h3> → === Foo ===
+ * etc.
+ * Also handles plain "N. Heading" number-prefixed lines that Google Docs
+ * sometimes emits as plain text instead of heading elements.
+ */
+function convertHeadings(text: string): string {
+  // HTML heading tags → wikitext
+  let result = text.replace(
+    /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi,
+    (_match, level: string, content: string) => {
+      const eq = '='.repeat(Number(level));
+      const plain = content.replace(/<[^>]+>/g, '').trim();
+      return `\n${eq} ${plain} ${eq}\n`;
+    },
+  );
+
+  // Strip remaining HTML tags that come from rich-text paste (Google Docs)
+  // but preserve newlines embedded in the content.
+  result = result.replace(/<br\s*\/?>/gi, '\n');
+  result = result.replace(/<\/p>/gi, '\n');
+  result = result.replace(/<[^>]+>/g, '');
+
+  // Collapse 3+ consecutive blank lines to 2
+  result = result.replace(/\n{3,}/g, '\n\n');
+
+  return result;
+}
+
+/**
  * Parse all inline URL citations from the text.
  * Matches: (https://...) or (http://...)
  * Returns unique URLs in order of first appearance.
@@ -197,15 +243,19 @@ export function DraftFormatter() {
   const wikitextRef = useRef<HTMLTextAreaElement>(null);
 
   const handleFormat = async () => {
-    const text = inputText.trim();
-    if (!text) return;
+    // Convert headings and clean up HTML from rich-text pastes before anything else
+    const rawText = convertHeadings(inputText.trim());
+    if (!rawText) return;
 
     setIsProcessing(true);
     setHasResult(false);
     setRefs([]);
     setWikitext('');
 
-    const urls = extractUrls(text);
+    // Try to identify the article subject for self-promo detection
+    const subjectName = guessSubjectName(rawText);
+
+    const urls = extractUrls(rawText);
 
     // Build ref objects in parallel
     const usedNames = new Set<string>();
@@ -214,8 +264,8 @@ export function DraftFormatter() {
         const domain = extractDomain(url);
         const name = makeRefName(url, i, usedNames);
 
-        // Source verdict via press-release detector
-        const detection = detectPressReleaseOrSelfPromo(url, domain);
+        // Source verdict via press-release detector (pass subject for self-promo check)
+        const detection = detectPressReleaseOrSelfPromo(url, domain, subjectName);
         const verdict: ParsedRef['verdict'] = detection.isPressRelease ? 'flagged' : 'qualifying';
         const flagReason = detection.isPressRelease
           ? (detection.reason || getPressReleaseLabel(detection.category))
@@ -236,7 +286,7 @@ export function DraftFormatter() {
       }),
     );
 
-    const wt = buildWikitext(text, refResults);
+    const wt = buildWikitext(rawText, refResults);
 
     setRefs(refResults);
     setWikitext(wt);

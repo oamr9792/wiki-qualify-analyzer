@@ -695,6 +695,36 @@ export interface NotabilityAssessment {
  * Per-domain diminishing returns are steep — five pieces in one outlet is one
  * publisher's editorial judgement, not five.
  */
+/**
+ * Collapse a full subdomain to its root registrable domain so that
+ * ravenswire.usatoday.com, trojanswire.usatoday.com, etc. all count as
+ * "usatoday.com" for the purposes of publisher diversity.
+ *
+ * We keep the last two labels for most domains (example.com) but keep three
+ * for well-known second-level ccTLDs (co.uk, com.au, etc.) so that
+ * bbc.co.uk doesn't collapse to just "co.uk".
+ */
+const MULTI_LABEL_TLDS = new Set([
+  'co.uk', 'org.uk', 'me.uk', 'net.uk', 'ac.uk', 'gov.uk',
+  'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au',
+  'co.nz', 'org.nz', 'net.nz', 'ac.nz', 'co.in', 'org.in',
+  'com.br', 'net.br', 'org.br', 'co.za', 'org.za',
+  'co.jp', 'ne.jp', 'or.jp', 'ac.jp',
+]);
+
+function toRootDomain(domain: string): string {
+  const parts = domain.toLowerCase().split('.');
+  if (parts.length <= 2) return domain;
+  // Check if last two parts form a known multi-label TLD
+  const lastTwo = parts.slice(-2).join('.');
+  if (MULTI_LABEL_TLDS.has(lastTwo)) {
+    // Keep last 3 parts: e.g. bbc.co.uk
+    return parts.slice(-3).join('.');
+  }
+  // Default: keep last 2 parts
+  return parts.slice(-2).join('.');
+}
+
 export function assessNotability(verdicts: SourceVerdict[]): NotabilityAssessment {
   const qualifying = verdicts.filter(v => v.status === 'counts');
   const supporting = verdicts.filter(v => v.status === 'partial');
@@ -706,11 +736,15 @@ export function assessNotability(verdicts: SourceVerdict[]): NotabilityAssessmen
   [...qualifying]
     .sort((a, b) => b.weight - a.weight)
     .forEach(v => {
-      const seen = perDomain.get(v.domain) || 0;
+      // Normalise to root publisher domain so that wire subdomains
+      // (ravenswire.usatoday.com, trojanswire.usatoday.com, etc.) all
+      // count as the same publisher — usatoday.com.
+      const publisherKey = toRootDomain(v.domain);
+      const seen = perDomain.get(publisherKey) || 0;
       // 1st from a domain: full. 2nd: 40%. 3rd+: nothing.
       const factor = seen === 0 ? 1 : seen === 1 ? 0.4 : 0;
       weightedTotal += v.weight * factor;
-      perDomain.set(v.domain, seen + 1);
+      perDomain.set(publisherKey, seen + 1);
     });
 
   // Supporting sources contribute a small amount, capped.
