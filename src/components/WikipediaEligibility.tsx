@@ -121,7 +121,7 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
   }
   
   return (
-    <div className="h-full overflow-auto">
+    <div>
       <div className="p-4">
         <div className="space-y-4">
           {/* Title and subject, no score here */}

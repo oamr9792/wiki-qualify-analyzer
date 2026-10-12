@@ -462,7 +462,7 @@ export function UnifiedSearch() {
   }
 
   return (
-    <div className={`max-w-5xl w-full ${results.length > 0 ? 'h-screen' : ''} flex flex-col p-0`}>
+    <div className={`max-w-5xl w-full flex flex-col p-0`}>
       <ModeToggle mode={mode} setMode={setMode} />
       <Card className={`${results.length > 0 ? 'mb-4' : 'mb-0 w-full'} shadow-sm border-gray-200 p-0`}>
         <CardContent className={`${results.length > 0 ? 'pt-4 pb-3' : 'py-6'}`}>
@@ -581,18 +581,18 @@ export function UnifiedSearch() {
 
       {/* Results display - tabbed interface optimized for mobile */}
       {results.length > 0 && !isLoading && (
-        <div className="flex-1 overflow-hidden">
-          <Tabs defaultValue="eligibility" className="h-full flex flex-col">
+        <div className="flex-1">
+          <Tabs defaultValue="eligibility" className="flex flex-col">
             <TabsList className="w-full mb-2 justify-start overflow-x-auto flex-nowrap">
               <TabsTrigger value="eligibility" className="whitespace-nowrap">Eligibility</TabsTrigger>
               <TabsTrigger value="sources" className="whitespace-nowrap">Sources</TabsTrigger>
               <TabsTrigger value="draft" className="whitespace-nowrap">Wikipedia Draft</TabsTrigger>
             </TabsList>
             
-            <div className="flex-1 overflow-auto p-0">
+            <div className="p-0">
               {/* Eligibility Tab */}
-              <TabsContent value="eligibility" className="h-full overflow-auto m-0 p-0">
-                <Card className="h-full border-gray-200 rounded-none">
+              <TabsContent value="eligibility" className="m-0 p-0">
+                <Card className="border-gray-200 rounded-none">
                   <CardContent className="p-2">
                     <WikipediaEligibility result={eligibilityResult} query={searchedQuery} />
                     
