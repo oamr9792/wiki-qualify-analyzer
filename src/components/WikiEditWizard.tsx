@@ -23,6 +23,8 @@ import {
   RotateCcw,
   ExternalLink,
   Info,
+  Copy,
+  ClipboardCheck,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -277,6 +279,9 @@ export function WikiEditWizard({ initialUrl }: { initialUrl?: string } = {}) {
   // Step 3 state
   const [verdict, setVerdict] = useState<EditVerdict | null>(null);
   const [diffParts, setDiffParts] = useState<DiffPart[]>([]);
+  const [proposedText, setProposedText] = useState('');
+  const [showWikitext, setShowWikitext] = useState(false);
+  const [wikitextCopied, setWikitextCopied] = useState(false);
 
   // Tooltip
   const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
@@ -333,8 +338,11 @@ export function WikiEditWizard({ initialUrl }: { initialUrl?: string } = {}) {
     // Evaluate against Wikipedia policies
     const v = evaluateEdit(originalPassage, proposed);
     setVerdict(v);
+    setProposedText(proposed);
     setIsEvaluating(false);
     setShowDiff(true);
+    setShowWikitext(false);
+    setWikitextCopied(false);
     setStep(3);
   };
 
@@ -350,8 +358,33 @@ export function WikiEditWizard({ initialUrl }: { initialUrl?: string } = {}) {
     setDiffParts([]);
     setShowDiff(false);
     setTooltip(null);
+    setProposedText('');
+    setShowWikitext(false);
+    setWikitextCopied(false);
     if (passageRef.current) passageRef.current.innerHTML = '';
     if (proposedRef.current) proposedRef.current.innerHTML = '';
+  };
+
+  /** Build the full updated wikitext by substituting the proposed text for the original passage. */
+  const buildUpdatedWikitext = (): string => {
+    if (!wikitext || !originalPassage || !proposedText) return proposedText;
+    // Try a direct string replacement first
+    if (wikitext.includes(originalPassage)) {
+      return wikitext.replace(originalPassage, proposedText);
+    }
+    // Fall back to just returning the proposed passage with a note
+    return proposedText;
+  };
+
+  const handleCopyWikitext = async () => {
+    const text = buildUpdatedWikitext();
+    try {
+      await navigator.clipboard.writeText(text);
+      setWikitextCopied(true);
+      setTimeout(() => setWikitextCopied(false), 2000);
+    } catch {
+      // fallback: select the textarea
+    }
   };
 
   const handleBackToEdit = () => {
@@ -585,6 +618,49 @@ export function WikiEditWizard({ initialUrl }: { initialUrl?: string } = {}) {
               <span className="bg-red-100 text-red-700 line-through px-1 rounded">red</span> = removed
             </p>
           </div>
+
+          {/* Wikitext export — only shown when approved */}
+          {verdict.approved && (
+            <div className="space-y-2">
+              {!showWikitext ? (
+                <Button
+                  onClick={() => setShowWikitext(true)}
+                  className="bg-[#17163e] hover:bg-[#232253] text-white"
+                  size="sm"
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Get wikitext to paste into Wikipedia
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-medium text-gray-700">Updated wikitext</div>
+                    <button
+                      onClick={handleCopyWikitext}
+                      className="flex items-center gap-1.5 text-xs text-[#17163e] hover:underline"
+                    >
+                      {wikitextCopied
+                        ? <><ClipboardCheck className="h-3.5 w-3.5 text-green-600" /><span className="text-green-600">Copied!</span></>
+                        : <><Copy className="h-3.5 w-3.5" />Copy to clipboard</>
+                      }
+                    </button>
+                  </div>
+                  <textarea
+                    readOnly
+                    value={buildUpdatedWikitext()}
+                    rows={10}
+                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-mono leading-relaxed focus:outline-none resize-y"
+                  />
+                  <p className="text-xs text-gray-400">
+                    {wikitext && wikitext.includes(originalPassage)
+                      ? 'This is the full article wikitext with your edit applied. Go to Wikipedia → Edit source → replace the content → Save.'
+                      : 'This is your edited passage. Go to Wikipedia → Edit source → find and replace the original paragraph → Save.'
+                    }
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleBackToEdit}>

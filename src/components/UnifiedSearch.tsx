@@ -7,7 +7,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ExternalLink, AlertCircle, Globe, Info, Search, Newspaper, BookOpen, CheckCircle, XCircle, HelpCircle, Shield, Loader2, Terminal, Calendar } from 'lucide-react';
+import { ExternalLink, AlertCircle, Globe, Info, Search, Newspaper, BookOpen, CheckCircle, XCircle, HelpCircle, Shield, Loader2, Terminal, Calendar, FileText, PenLine, ChevronDown, Link } from 'lucide-react';
 import { WikipediaEligibility } from '@/components/WikipediaEligibility';
 import { assessWikipediaEligibility, WikipediaEligibilityResult } from '@/utils/wikipediaEligibility';
 import { getSourceReliability, wikipediaSourceReliability } from '@/utils/wikipediaSourceReliability';
@@ -21,31 +21,116 @@ import { checkWikipediaExistence, WikipediaExistenceResult } from '@/services/wi
 import { DraftFormatter } from '@/components/DraftFormatter';
 import { WikiEditWizard } from '@/components/WikiEditWizard';
 
-type AnalyserMode = 'entity' | 'checker' | 'formatter';
+// Top-level flow the user chose from the landing screen
+type TopFlow = 'landing' | 'eligibility' | 'formatter' | 'edit-wizard' | 'checker';
 
-/** Switches between analysing an entity, checking sources, or formatting a draft. */
-function ModeToggle({ mode, setMode }: { mode: AnalyserMode; setMode: (m: AnalyserMode) => void }) {
-  const base = 'px-4 py-2 text-sm rounded-md transition-colors';
-  const on = 'bg-[#17163e] text-white';
-  const off = 'bg-transparent text-gray-600 hover:bg-gray-100';
+/** Landing screen — three primary flows + an override menu for direct tool access */
+function LandingScreen({ onSelect }: { onSelect: (flow: TopFlow) => void }) {
+  const [showOverride, setShowOverride] = useState(false);
+
+  const flows = [
+    {
+      id: 'eligibility' as TopFlow,
+      icon: <Search className="h-7 w-7 text-[#17163e]" />,
+      label: "I don't have a Wikipedia page",
+      sub: "and I'm not sure if I'm eligible",
+      description: "We'll search the web, score your sources, and tell you whether you meet Wikipedia's notability standards.",
+    },
+    {
+      id: 'formatter' as TopFlow,
+      icon: <FileText className="h-7 w-7 text-[#17163e]" />,
+      label: "I don't have one, but I know I'm eligible",
+      sub: 'and I want to write my draft',
+      description: "Paste your draft text and we'll format it to Wikipedia's Manual of Style, check your sources, and flag any policy issues.",
+    },
+    {
+      id: 'edit-wizard' as TopFlow,
+      icon: <PenLine className="h-7 w-7 text-[#17163e]" />,
+      label: 'I already have a Wikipedia page',
+      sub: 'and I want to propose an edit',
+      description: "Paste the passage you want to change, write your edit, and we'll check it against Wikipedia's content policies before you submit.",
+    },
+    {
+      id: 'checker' as TopFlow,
+      icon: <Link className="h-7 w-7 text-[#17163e]" />,
+      label: 'I want to check my sources',
+      sub: 'before using them in a Wikipedia article',
+      description: "Paste a URL or domain and we'll check it against Wikipedia's reliable sources noticeboard — whether it's accepted, deprecated, or flagged.",
+    },
+  ];
+
+  const overrideTools = [
+    { id: 'eligibility' as TopFlow, label: 'Eligibility checker' },
+    { id: 'formatter' as TopFlow, label: 'Draft formatter' },
+    { id: 'edit-wizard' as TopFlow, label: 'Edit wizard' },
+    { id: 'checker' as TopFlow, label: 'Source checker' },
+  ];
 
   return (
-    <div className="flex justify-center gap-1 mb-4 p-1 bg-gray-100 rounded-lg self-center flex-wrap">
-      <button type="button" onClick={() => setMode('entity')} className={`${base} ${mode === 'entity' ? on : off}`}>
-        Analyse an entity
-      </button>
-      <button type="button" onClick={() => setMode('checker')} className={`${base} ${mode === 'checker' ? on : off}`}>
-        Check my sources
-      </button>
-      <button type="button" onClick={() => setMode('formatter')} className={`${base} ${mode === 'formatter' ? on : off}`}>
-        Format my draft
-      </button>
+    <div className="w-full max-w-2xl mx-auto space-y-4">
+      {flows.map(f => (
+        <button
+          key={f.id}
+          type="button"
+          onClick={() => onSelect(f.id)}
+          className="w-full text-left rounded-xl border border-gray-200 bg-white hover:border-[#17163e] hover:shadow-sm transition-all p-5 flex items-start gap-4 group"
+        >
+          <div className="mt-0.5 flex-shrink-0">{f.icon}</div>
+          <div>
+            <div className="font-semibold text-gray-800 group-hover:text-[#17163e] transition-colors">{f.label}</div>
+            <div className="text-sm text-gray-500 mb-1">{f.sub}</div>
+            <div className="text-xs text-gray-400 leading-relaxed">{f.description}</div>
+          </div>
+        </button>
+      ))}
+
+      {/* Override / direct-tool menu */}
+      <div className="pt-2">
+        <button
+          type="button"
+          onClick={() => setShowOverride(v => !v)}
+          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors mx-auto"
+        >
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showOverride ? 'rotate-180' : ''}`} />
+          Go directly to a tool
+        </button>
+        {showOverride && (
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            {overrideTools.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => onSelect(t.id)}
+                className="px-3 py-1.5 text-xs rounded-md border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 text-gray-600 transition-colors"
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
+/** Small "back to start" link shown at the top of each flow */
+function BackToStart({ onBack }: { onBack: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onBack}
+      className="text-xs text-gray-400 hover:text-gray-600 mb-4 flex items-center gap-1 transition-colors"
+    >
+      ← Back to start
+    </button>
+  );
+}
+
 export function UnifiedSearch() {
-  const [mode, setMode] = useState<AnalyserMode>('entity');
+  const [topFlow, setTopFlow] = useState<TopFlow>('landing');
+
+  // legacy mode kept for the eligibility/sources search flow
+  const [mode] = useState<'entity'>('entity');
   const [query, setQuery] = useState('');
   const [modifierKeyword1, setModifierKeyword1] = useState('');
   const [modifierKeyword2, setModifierKeyword2] = useState('');
@@ -457,19 +542,29 @@ export function UnifiedSearch() {
     }
   }, [isLoading]);
 
-  if (mode === 'checker') {
+  // ── Top-level flow routing ────────────────────────────────────────────────
+
+  if (topFlow === 'landing') {
+    return (
+      <div className="max-w-5xl w-full flex flex-col items-center p-0">
+        <LandingScreen onSelect={setTopFlow} />
+      </div>
+    );
+  }
+
+  if (topFlow === 'checker') {
     return (
       <div className="max-w-5xl w-full flex flex-col p-0">
-        <ModeToggle mode={mode} setMode={setMode} />
+        <BackToStart onBack={() => setTopFlow('landing')} />
         <SourceChecker />
       </div>
     );
   }
 
-  if (mode === 'formatter') {
+  if (topFlow === 'formatter') {
     return (
       <div className="max-w-5xl w-full flex flex-col p-0">
-        <ModeToggle mode={mode} setMode={setMode} />
+        <BackToStart onBack={() => setTopFlow('landing')} />
         <Card className="shadow-sm border-gray-200">
           <CardContent className="p-4">
             <DraftFormatter />
@@ -479,9 +574,23 @@ export function UnifiedSearch() {
     );
   }
 
+  if (topFlow === 'edit-wizard') {
+    return (
+      <div className="max-w-5xl w-full flex flex-col p-0">
+        <BackToStart onBack={() => setTopFlow('landing')} />
+        <Card className="shadow-sm border-gray-200">
+          <CardContent className="p-4">
+            <WikiEditWizard />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // topFlow === 'eligibility' — the search + analysis flow
   return (
     <div className={`max-w-5xl w-full flex flex-col p-0`}>
-      <ModeToggle mode={mode} setMode={setMode} />
+      <BackToStart onBack={() => setTopFlow('landing')} />
       <Card className={`${results.length > 0 ? 'mb-4' : 'mb-0 w-full'} shadow-sm border-gray-200 p-0`}>
         <CardContent className={`${results.length > 0 ? 'pt-4 pb-3' : 'py-6'}`}>
           <form onSubmit={handleSearch} className="flex flex-col gap-2">
