@@ -671,7 +671,7 @@ export function UnifiedSearch() {
               <TabsContent value="edit-wizard" className="m-0 p-0">
                 <Card className="border-gray-200">
                   <CardContent className="p-4">
-                    <WikiEditWizard />
+                    <WikiEditWizard initialUrl={eligibilityResult?.existingWikipediaUrl ?? ''} />
                   </CardContent>
                 </Card>
               </TabsContent>

@@ -249,11 +249,11 @@ function computeDiff(original: string, proposed: string): DiffPart[] {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function WikiEditWizard() {
+export function WikiEditWizard({ initialUrl }: { initialUrl?: string } = {}) {
   const [step, setStep] = useState<Step>(1);
 
   // Step 1 state
-  const [pageUrl, setPageUrl] = useState('');
+  const [pageUrl, setPageUrl] = useState(initialUrl ?? '');
   const [urlError, setUrlError] = useState('');
   const [isFetching, setIsFetching] = useState(false);
   const [fetchedTitle, setFetchedTitle] = useState('');
