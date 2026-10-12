@@ -139,11 +139,18 @@ function evaluateEdit(original: string, proposed: string): EditVerdict {
 
   // WP:V — unsourced added content (no <ref> or (url) in the added text)
   const hasInlineCite = /\(\s*https?:\/\/|<ref/i.test(added);
-  const addedWords = added.trim().split(/\s+/).length;
-  if (!hasInlineCite && addedWords > 20) {
+  const addedWords = added.trim().split(/\s+/).filter(Boolean).length;
+
+  // Any substantive new text (more than a handful of words, or containing
+  // factual claim markers) needs a citation. A pure style/grammar fix of
+  // a few words is the only exception.
+  const factualMarkers = /\b(said|wrote|stated|argued|claimed|founded|born|died|won|lost|appointed|served|led|created|published|released|joined|left|earned|received|awarded)\b/i;
+  const needsCite = addedWords > 5 || (addedWords > 0 && factualMarkers.test(added));
+
+  if (!hasInlineCite && needsCite) {
     flags.push({
       policy: 'WP:V',
-      detail: 'The added text contains no inline citation. Wikipedia requires verifiable sourcing for factual claims — add a <ref> citation or a URL in parentheses.',
+      detail: 'New text has been added without an inline citation. Wikipedia policy requires that any new factual claim be supported by a reliable, published source — add a <ref> tag with a URL or use the format (https://source.com) immediately after the claim.',
       severity: 'block',
     });
   }
