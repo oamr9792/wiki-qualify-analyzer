@@ -8,7 +8,6 @@
 
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -20,7 +19,7 @@ import {
   Loader2,
   RefreshCw,
 } from 'lucide-react';
-import { detectPressReleaseOrSelfPromo, getPressReleaseLabel } from '@/utils/pressReleaseDetector';
+import { evaluateSource } from '@/utils/sourceEvaluation';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -356,7 +355,6 @@ function scoreDraft(rawText: string, refs: ParsedRef[]): DraftScore {
 }
 
 export function DraftFormatter() {
-  const [inputText, setInputText] = useState('');
   const [refs, setRefs] = useState<ParsedRef[]>([]);
   const [wikitext, setWikitext] = useState('');
   const [highlightedWikitext, setHighlightedWikitext] = useState<React.ReactNode[]>([]);
@@ -364,22 +362,15 @@ export function DraftFormatter() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [hasResult, setHasResult] = useState(false);
+  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
 
-  const wikitextRef = useRef<HTMLTextAreaElement>(null);
-
-  /** Intercept paste to capture raw HTML before the browser strips it */
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const html = e.clipboardData.getData('text/html');
-    if (html) {
-      e.preventDefault();
-      setInputText(html);
-    }
-    // If no HTML, let the default paste (plain text) proceed normally
-  };
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const handleFormat = async () => {
-    // Convert headings and clean up HTML from rich-text pastes before anything else
-    const rawText = convertHeadings(inputText.trim());
+    // Read innerHTML from the contenteditable div — preserves heading tags from rich paste
+    const html = editorRef.current?.innerHTML || '';
+    // Convert headings and strip residual HTML
+    const rawText = convertHeadings(html.trim());
     if (!rawText) return;
 
     setIsProcessing(true);
@@ -388,6 +379,7 @@ export function DraftFormatter() {
     setWikitext('');
     setHighlightedWikitext([]);
     setDraftScore(null);
+    setTooltip(null);
 
     // Try to identify the article subject for self-promo detection (try multiple name variants)
     const subjectNames = guessSubjectNames(rawText);
@@ -401,17 +393,22 @@ export function DraftFormatter() {
         const domain = extractDomain(url);
         const name = makeRefName(url, i, usedNames);
 
-        // Source verdict via press-release detector (try all subject name variants)
-        let detection = detectPressReleaseOrSelfPromo(url, domain, subjectNames[0]);
-        if (!detection.isPressRelease && subjectNames.length > 1) {
+        // Use the same full evaluation pipeline as the main analysis tool.
+        // Try all subject name variants so middle initials don't break matching.
+        const subject = subjectNames[0] || '';
+        const sourceVerdict = evaluateSource({ url }, subject);
+        // If the first variant didn't catch a self-promo hit, try the others
+        let finalVerdict = sourceVerdict;
+        if (sourceVerdict.status !== 'disqualified' && subjectNames.length > 1) {
           for (let ni = 1; ni < subjectNames.length; ni++) {
-            const d2 = detectPressReleaseOrSelfPromo(url, domain, subjectNames[ni]);
-            if (d2.isPressRelease) { detection = d2; break; }
+            const v2 = evaluateSource({ url }, subjectNames[ni]);
+            if (v2.status === 'disqualified') { finalVerdict = v2; break; }
           }
         }
-        const verdict: ParsedRef['verdict'] = detection.isPressRelease ? 'flagged' : 'qualifying';
-        const flagReason = detection.isPressRelease
-          ? (detection.reason || getPressReleaseLabel(detection.category))
+        const verdict: ParsedRef['verdict'] = finalVerdict.status === 'fails' ? 'flagged' : 'qualifying';
+        // Pull the most specific failure reason
+        const flagReason = verdict === 'flagged'
+          ? (finalVerdict.failures[0]?.detail || finalVerdict.headline || 'Non-independent or unreliable source.')
           : null;
 
         // Fetch page metadata
@@ -435,31 +432,34 @@ export function DraftFormatter() {
     const score = scoreDraft(rawText, refResults);
 
     // Build highlighted wikitext: split into lines, colour flagged sentences red
+    const rawSentences = rawText.split(/(?<=[.!?])\s+(?=[A-Z])/);
     const wtLines = wt.split('\n');
     const highlighted: React.ReactNode[] = wtLines.map((line, li) => {
-      // Try to match this line back to a flagged sentence
-      const flagged = [...score.flaggedSentences.entries()].find(([, reason]) => {
-        // Simple heuristic: if this line contains text from a flagged sentence, colour it
-        return reason && line.length > 20 && wt.includes(line.trim().slice(0, 40));
-      });
-      // More reliable: check if the sentence text appears in the line
-      const isFlaggedLine = [...score.flaggedSentences.keys()].some(idx => {
-        const sentences = rawText.split(/(?<=[.!?])\s+(?=[A-Z])/);
-        const s = sentences[idx];
-        if (!s) return false;
-        // Use first 30 chars of sentence as fingerprint
-        const fp = s.replace(/\(https?:\/\/[^\s)]+\)/gi, '').trim().slice(0, 30);
-        return fp.length > 10 && line.includes(fp);
-      });
-      return (
-        <span
-          key={li}
-          className={isFlaggedLine ? 'bg-red-100 text-red-900' : ''}
-          title={isFlaggedLine ? 'Issue flagged — see draft score panel' : undefined}
-        >
-          {line}{'\n'}
-        </span>
-      );
+      // Find if this line matches a flagged sentence by fingerprinting
+      let flagReason: string | null = null;
+      for (const [idx, reason] of score.flaggedSentences.entries()) {
+        const s = rawSentences[idx];
+        if (!s) continue;
+        const fp = s.replace(/\(https?:\/\/[^\s)]+\)/gi, '').trim().slice(0, 35);
+        if (fp.length > 10 && line.includes(fp)) {
+          flagReason = reason;
+          break;
+        }
+      }
+      if (flagReason) {
+        return (
+          <span
+            key={li}
+            className="bg-red-100 text-red-900 cursor-help rounded-sm"
+            onMouseEnter={(e) => setTooltip({ text: flagReason!, x: e.clientX, y: e.clientY })}
+            onMouseMove={(e) => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
+            onMouseLeave={() => setTooltip(null)}
+          >
+            {line}{'\n'}
+          </span>
+        );
+      }
+      return <span key={li}>{line}{'\n'}</span>;
     });
 
     setRefs(refResults);
@@ -478,9 +478,12 @@ export function DraftFormatter() {
   };
 
   const handleReset = () => {
-    setInputText('');
+    if (editorRef.current) editorRef.current.innerHTML = '';
     setRefs([]);
     setWikitext('');
+    setHighlightedWikitext([]);
+    setDraftScore(null);
+    setTooltip(null);
     setHasResult(false);
   };
 
@@ -488,7 +491,16 @@ export function DraftFormatter() {
   const flaggedCount = refs.filter(r => r.verdict === 'flagged').length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
+      {/* Hover tooltip for flagged lines */}
+      {tooltip && (
+        <div
+          className="fixed z-50 max-w-xs rounded-lg bg-gray-900 text-white text-xs px-3 py-2 shadow-lg pointer-events-none leading-snug"
+          style={{ left: tooltip.x + 12, top: tooltip.y - 8 }}
+        >
+          {tooltip.text}
+        </div>
+      )}
       {/* Header */}
       <div>
         <h3 className="text-lg font-medium">Wikipedia Draft Formatter</h3>
@@ -504,17 +516,18 @@ export function DraftFormatter() {
       {/* Input area */}
       {!hasResult && (
         <div className="space-y-3">
-          <Textarea
-            placeholder={`Paste your article text here. Include URLs in parentheses after each claim.\n\nExample:\nJane Smith is an award-winning journalist (https://nytimes.com/article-about-jane) who has covered international affairs for over a decade (https://bbc.com/news/jane-smith-profile).`}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onPaste={handlePaste}
-            className="min-h-[260px] font-mono text-sm"
+          <div
+            ref={editorRef}
+            contentEditable
+            suppressContentEditableWarning
+            data-placeholder="Paste your article text here. Paste directly from Google Docs, Word, or any editor — headings and formatting are preserved automatically. Include URLs in parentheses after each claim, e.g. (https://nytimes.com/article)."
+            className="min-h-[260px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground empty:before:pointer-events-none"
+            style={{ fontFamily: 'inherit', lineHeight: '1.6' }}
           />
           <div className="flex gap-2">
             <Button
               onClick={handleFormat}
-              disabled={!inputText.trim() || isProcessing}
+              disabled={isProcessing}
               className="bg-[#17163e] hover:bg-[#232253] text-white"
             >
               {isProcessing ? (
