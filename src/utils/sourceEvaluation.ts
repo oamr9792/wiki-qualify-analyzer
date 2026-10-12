@@ -445,7 +445,7 @@ export function evaluateSource(input: SourceInput, subject = ''): SourceVerdict 
   }
 
   // ── Gate 2: independence ───────────────────────────────────────────────────
-  const prCheck = detectPressReleaseOrSelfPromo(rawUrl, domain);
+  const prCheck = detectPressReleaseOrSelfPromo(rawUrl, domain, subject || undefined);
   let independent = true;
   // Declared here rather than at Gate 3 because the opinion-section check below
   // needs to clear it.

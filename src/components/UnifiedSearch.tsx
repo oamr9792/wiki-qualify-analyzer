@@ -19,6 +19,7 @@ import { SourcesTab } from '@/components/SourcesTab';
 import { SourceChecker } from '@/components/SourceChecker';
 import { checkWikipediaExistence, WikipediaExistenceResult } from '@/services/wikipediaExistenceService';
 import { DraftFormatter } from '@/components/DraftFormatter';
+import { WikiEditWizard } from '@/components/WikiEditWizard';
 
 type AnalyserMode = 'entity' | 'checker' | 'formatter';
 
@@ -605,6 +606,7 @@ export function UnifiedSearch() {
               <TabsTrigger value="sources" className="whitespace-nowrap">Sources</TabsTrigger>
               <TabsTrigger value="draft" className="whitespace-nowrap">Wikipedia Draft</TabsTrigger>
               <TabsTrigger value="formatter" className="whitespace-nowrap">Draft Formatter</TabsTrigger>
+              <TabsTrigger value="edit-wizard" className="whitespace-nowrap">Edit Wizard</TabsTrigger>
             </TabsList>
             
             <div className="p-0">
@@ -640,6 +642,15 @@ export function UnifiedSearch() {
                 <Card className="border-gray-200">
                   <CardContent className="p-4">
                     <DraftFormatter />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Wikipedia Edit Wizard Tab */}
+              <TabsContent value="edit-wizard" className="m-0 p-0">
+                <Card className="border-gray-200">
+                  <CardContent className="p-4">
+                    <WikiEditWizard />
                   </CardContent>
                 </Card>
               </TabsContent>
