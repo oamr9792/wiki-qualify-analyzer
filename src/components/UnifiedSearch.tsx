@@ -18,22 +18,26 @@ import { isSearchAllowed, incrementSearchCount, getRemainingSearches, getTimeUnt
 import { SourcesTab } from '@/components/SourcesTab';
 import { SourceChecker } from '@/components/SourceChecker';
 import { checkWikipediaExistence, WikipediaExistenceResult } from '@/services/wikipediaExistenceService';
+import { DraftFormatter } from '@/components/DraftFormatter';
 
-type AnalyserMode = 'entity' | 'checker';
+type AnalyserMode = 'entity' | 'checker' | 'formatter';
 
-/** Switches between analysing an entity and checking a pasted list of sources. */
+/** Switches between analysing an entity, checking sources, or formatting a draft. */
 function ModeToggle({ mode, setMode }: { mode: AnalyserMode; setMode: (m: AnalyserMode) => void }) {
   const base = 'px-4 py-2 text-sm rounded-md transition-colors';
   const on = 'bg-[#17163e] text-white';
   const off = 'bg-transparent text-gray-600 hover:bg-gray-100';
 
   return (
-    <div className="flex justify-center gap-1 mb-4 p-1 bg-gray-100 rounded-lg self-center">
+    <div className="flex justify-center gap-1 mb-4 p-1 bg-gray-100 rounded-lg self-center flex-wrap">
       <button type="button" onClick={() => setMode('entity')} className={`${base} ${mode === 'entity' ? on : off}`}>
         Analyse an entity
       </button>
       <button type="button" onClick={() => setMode('checker')} className={`${base} ${mode === 'checker' ? on : off}`}>
         Check my sources
+      </button>
+      <button type="button" onClick={() => setMode('formatter')} className={`${base} ${mode === 'formatter' ? on : off}`}>
+        Format my draft
       </button>
     </div>
   );
@@ -461,6 +465,19 @@ export function UnifiedSearch() {
     );
   }
 
+  if (mode === 'formatter') {
+    return (
+      <div className="max-w-5xl w-full flex flex-col p-0">
+        <ModeToggle mode={mode} setMode={setMode} />
+        <Card className="shadow-sm border-gray-200">
+          <CardContent className="p-4">
+            <DraftFormatter />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className={`max-w-5xl w-full flex flex-col p-0`}>
       <ModeToggle mode={mode} setMode={setMode} />
@@ -587,6 +604,7 @@ export function UnifiedSearch() {
               <TabsTrigger value="eligibility" className="whitespace-nowrap">Eligibility</TabsTrigger>
               <TabsTrigger value="sources" className="whitespace-nowrap">Sources</TabsTrigger>
               <TabsTrigger value="draft" className="whitespace-nowrap">Wikipedia Draft</TabsTrigger>
+              <TabsTrigger value="formatter" className="whitespace-nowrap">Draft Formatter</TabsTrigger>
             </TabsList>
             
             <div className="p-0">
@@ -617,6 +635,15 @@ export function UnifiedSearch() {
                 )}
               </TabsContent>
               
+              {/* Draft Formatter Tab */}
+              <TabsContent value="formatter" className="m-0 p-0">
+                <Card className="border-gray-200">
+                  <CardContent className="p-4">
+                    <DraftFormatter />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               {/* Wikipedia Draft Tab */}
               <TabsContent value="draft" className="m-0 p-0">
                 <Card className="border-gray-200">

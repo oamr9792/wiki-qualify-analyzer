@@ -190,6 +190,14 @@ export const wikipediaSourceReliability: Record<string, SourceReliability> = {
   "globalresearch.ca": { name: "Centre for Research on Globalisation", reliability: "Deprecated", score: 0 },
   "telesurtv.net": { name: "Telesur", reliability: "Deprecated", score: 0 },
   "southfront.org": { name: "SouthFront", reliability: "Deprecated", score: 0 },
+  // Chinese state / crowd-sourced sources — deprecated on the WP perennial list
+  "baike.baidu.com": { name: "Baidu Baike", reliability: "Deprecated", score: 0 },
+  "baidu.com": { name: "Baidu Baike", reliability: "Deprecated", score: 0 },
+  "zh.wikipedia.org": { name: "Chinese Wikipedia (not a RS)", reliability: "Deprecated", score: 0 },
+  "people.com.cn": { name: "People's Daily", reliability: "Deprecated", score: 0 },
+  "xinhuanet.com": { name: "Xinhua News Agency", reliability: "Deprecated", score: 0 },
+  "globaltimes.cn": { name: "Global Times", reliability: "Deprecated", score: 0 },
+  "chinadaily.com.cn": { name: "China Daily", reliability: "Deprecated", score: 0 },
   "timesofisrael.com": { name: "Times of Israel", reliability: "Generally reliable", score: 10 },
 };
 
