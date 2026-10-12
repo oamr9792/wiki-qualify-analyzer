@@ -10,7 +10,7 @@
  * Step 3 — Result: approved / needs amendment, with specific policy flags.
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -376,7 +376,7 @@ export function WikiEditWizard() {
       {/* Step indicator */}
       <div className="flex items-center gap-2 text-xs text-gray-500">
         {(['1', '2', '3'] as const).map((s, i) => (
-          <React.Fragment key={s}>
+          <div key={s} className="flex items-center gap-1.5">
             <div className={`flex items-center gap-1.5 ${step === (i + 1) ? 'text-[#17163e] font-semibold' : step > (i + 1) ? 'text-green-600' : ''}`}>
               <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold
                 ${step === (i + 1) ? 'bg-[#17163e] text-white' : step > (i + 1) ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-400'}`}>
@@ -385,7 +385,7 @@ export function WikiEditWizard() {
               <span>{['Locate passage', 'Make your edit', 'Policy review'][i]}</span>
             </div>
             {i < 2 && <ArrowRight className="h-3 w-3 text-gray-300" />}
-          </React.Fragment>
+          </div>
         ))}
         {step > 1 && (
           <button onClick={handleReset} className="ml-auto flex items-center gap-1 text-gray-400 hover:text-gray-600">
