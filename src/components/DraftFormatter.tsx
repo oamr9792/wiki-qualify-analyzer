@@ -363,6 +363,7 @@ export function DraftFormatter() {
   const [copied, setCopied] = useState(false);
   const [hasResult, setHasResult] = useState(false);
   const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
+  const [manualSubject, setManualSubject] = useState('');
 
   const editorRef = useRef<HTMLDivElement>(null);
 
@@ -381,8 +382,11 @@ export function DraftFormatter() {
     setDraftScore(null);
     setTooltip(null);
 
-    // Try to identify the article subject for self-promo detection (try multiple name variants)
-    const subjectNames = guessSubjectNames(rawText);
+    // Use manually entered subject if provided, otherwise guess from text
+    const guessed = guessSubjectNames(rawText);
+    const subjectNames = manualSubject.trim()
+      ? [manualSubject.trim(), ...guessSubjectNames(manualSubject.trim())]
+      : guessed;
 
     const urls = extractUrls(rawText);
 
@@ -399,10 +403,10 @@ export function DraftFormatter() {
         const sourceVerdict = evaluateSource({ url }, subject);
         // If the first variant didn't catch a self-promo hit, try the others
         let finalVerdict = sourceVerdict;
-        if (sourceVerdict.status !== 'disqualified' && subjectNames.length > 1) {
+        if (sourceVerdict.status !== 'fails' && subjectNames.length > 1) {
           for (let ni = 1; ni < subjectNames.length; ni++) {
             const v2 = evaluateSource({ url }, subjectNames[ni]);
-            if (v2.status === 'disqualified') { finalVerdict = v2; break; }
+            if (v2.status === 'fails') { finalVerdict = v2; break; }
           }
         }
         const verdict: ParsedRef['verdict'] = finalVerdict.status === 'fails' ? 'flagged' : 'qualifying';
@@ -485,6 +489,7 @@ export function DraftFormatter() {
     setDraftScore(null);
     setTooltip(null);
     setHasResult(false);
+    setManualSubject('');
   };
 
   const qualifyingCount = refs.filter(r => r.verdict === 'qualifying').length;
@@ -516,6 +521,19 @@ export function DraftFormatter() {
       {/* Input area */}
       {!hasResult && (
         <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              Article subject <span className="text-gray-400 font-normal">(strongly recommended)</span>
+            </label>
+            <input
+              type="text"
+              value={manualSubject}
+              onChange={e => setManualSubject(e.target.value)}
+              placeholder="e.g. Murry Gunty, Acme Corporation"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <p className="text-xs text-gray-400">Used to detect whether any sources are the subject's own website or press materials.</p>
+          </div>
           <div
             ref={editorRef}
             contentEditable
