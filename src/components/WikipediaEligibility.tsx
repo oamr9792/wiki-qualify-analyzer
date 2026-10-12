@@ -39,31 +39,7 @@ export function WikipediaEligibility({ result, query }: WikipediaEligibilityProp
   
   // Define openCalendlyPopup BEFORE it's used
   const openCalendlyPopup = () => {
-    // Direct URL approach as backup
-    const calendlyUrl = 'https://calendly.com/orani/30min';
-    
-    // Try using the Calendly API if available
-    if (typeof window !== 'undefined') {
-      if (window.Calendly && typeof window.Calendly.initPopupWidget === 'function') {
-        window.Calendly.initPopupWidget({
-          url: calendlyUrl
-        });
-      } else {
-        // Direct popup if Calendly API is not available
-        const width = 1000;
-        const height = 750;
-        const left = (screen.width / 2) - (width / 2);
-        const top = (screen.height / 2) - (height / 2);
-        window.open(
-          calendlyUrl,
-          'CalendlyPopup',
-          `width=${width},height=${height},top=${top},left=${left}`
-        );
-      }
-    } else {
-      // Fallback for non-browser environments
-      console.log('Calendly scheduling link:', calendlyUrl);
-    }
+    window.open('https://calendar.app.google/2wyWnzWZyr7qMpHC9', '_blank');
   };
 
   // Sources that actually clear all four of Wikipedia's gates.

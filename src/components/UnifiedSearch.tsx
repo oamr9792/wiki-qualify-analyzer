@@ -618,22 +618,14 @@ export function UnifiedSearch() {
               </TabsContent>
               
               {/* Wikipedia Draft Tab */}
-              <TabsContent value="draft" className="h-full overflow-auto m-0 p-0">
-                <Card className="h-full border-gray-200">
+              <TabsContent value="draft" className="m-0 p-0">
+                <Card className="border-gray-200">
                   <CardContent className="p-4">
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="text-lg font-medium">Wikipedia Draft</h3>
                       
                       <Button 
-                        onClick={() => {
-                          if (typeof window !== 'undefined' && window.Calendly) {
-                            window.Calendly.initPopupWidget({
-                              url: 'https://calendly.com/orani/30min'
-                            });
-                          } else {
-                            window.open('https://calendly.com/orani/30min', '_blank');
-                          }
-                        }}
+                        onClick={() => window.open('https://calendar.app.google/2wyWnzWZyr7qMpHC9', '_blank')}
                         className="bg-[#17163e] hover:bg-[#232253] text-white"
                         size="sm"
                       >
